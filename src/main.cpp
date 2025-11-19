@@ -345,7 +345,7 @@ int main(int argc, char* argv[])
     while (!glfwWindowShouldClose(window))
     {
 
-        carInfo.updatePosition();
+        carInfo.update();
 
         // Aqui executamos as operações de renderização
 
@@ -355,7 +355,7 @@ int main(int argc, char* argv[])
         // Conversaremos sobre sistemas de cores nas aulas de Modelos de Iluminação.
         //
         //           R     G     B     A
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClearColor(0.5f, 0.5f, 1.0f, 1.0f);
 
         // "Pintamos" todos os pixels do framebuffer com a cor definida acima,
         // e também resetamos todos os pixels do Z-buffer (depth buffer).
@@ -369,10 +369,18 @@ int main(int argc, char* argv[])
         // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
         // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
         // e ScrollCallback().
+
+        //glm::vec4 camera_position_c = carInfo.getPosition()
+
+        /*
         float r = g_CameraDistance;
         float y = r*sin(g_CameraPhi);
         float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
         float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+
+        */
+
+        /*
 
         // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
         // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
@@ -380,6 +388,15 @@ int main(int argc, char* argv[])
         glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
         glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
         glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+
+        */
+
+        const std::array<glm::vec4, 3> camera = carInfo.getCam1();
+
+        glm::vec4 camera_position_c = camera[0]; // Ponto "c", centro da câmera
+        glm::vec4 camera_view_vector = camera[1] ; // Vetor "view", sentido para onde a câmera está virada
+        glm::vec4 camera_up_vector = camera[2] ; // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+
 
         // Computamos a matriz "View" utilizando os parâmetros da câmera para
         // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
@@ -464,6 +481,8 @@ int main(int argc, char* argv[])
         glfwPollEvents();
 
         updateFromKeyboard();
+
+
     }
 
     // Finalizamos o uso dos recursos do sistema operacional
@@ -1598,13 +1617,13 @@ void PrintObjModelInfo(ObjModel* model)
 
 void updateFromKeyboard(){
 
-    if(keyInfo.forwards_held) carInfo.addVelocity(0.01f);
+    if(keyInfo.forwards_held) carInfo.accelerate();
 
     if(keyInfo.left_held) carInfo.rotateY(0.01f);
 
     if(keyInfo.right_held) carInfo.rotateY(-0.01f);
 
-    if(keyInfo.brake_held) carInfo.setVelocity(carInfo.getVelocity() * 0.9f);
+    //if(keyInfo.brake_held) carInfo.setVelocity(carInfo.getVelocity() * 0.9f);
 
 
 }
