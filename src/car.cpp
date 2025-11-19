@@ -31,6 +31,12 @@ public:
     void setVelocity(float vel){
         velocity = -vel;
     }
+    void addVelocity(float vel){
+        velocity -= vel;
+    }
+    float getVelocity(){
+        return -velocity;
+    }
     void rotateY(float theta){
 
         rotation.y += theta;

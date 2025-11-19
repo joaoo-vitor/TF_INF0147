@@ -49,6 +49,7 @@
 #include "utils.h"
 #include "matrices.h"
 #include "car.cpp"
+#include "keyboard.cpp"
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -153,6 +154,9 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
+// Funcao de atualizacao de estado por dados do teclado
+void updateFromKeyboard();
+
 // Definimos uma estrutura que armazenará dados necessários para renderizar
 // cada objeto da cena virtual.
 struct SceneObject
@@ -224,6 +228,14 @@ GLint g_bbox_max_uniform;
 
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
+
+// Struct com informacoes do teclado
+
+KEYBOARD keyInfo;
+
+
+// Objeto com informacoes fisicas do carro
+Car carInfo = Car();
 
 int main(int argc, char* argv[])
 {
@@ -309,8 +321,8 @@ int main(int argc, char* argv[])
     ObjModel carmodel("../../data/Car.obj");
     ComputeNormals(&carmodel);
     BuildTrianglesAndAddToVirtualScene(&carmodel);
-    Car carInfo = Car();
-    carInfo.setVelocity(0.002f);
+
+    carInfo.setVelocity(0.0f);
 
     if ( argc > 1 )
     {
@@ -332,7 +344,7 @@ int main(int argc, char* argv[])
     // Ficamos em um loop infinito, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
     {
-        carInfo.rotateY(0.05f);
+
         carInfo.updatePosition();
 
         // Aqui executamos as operações de renderização
@@ -450,6 +462,8 @@ int main(int argc, char* argv[])
         // definidas anteriormente usando glfwSet*Callback() serão chamadas
         // pela biblioteca GLFW.
         glfwPollEvents();
+
+        updateFromKeyboard();
     }
 
     // Finalizamos o uso dos recursos do sistema operacional
@@ -1016,7 +1030,7 @@ GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id)
         fprintf(stderr, "%s", output.c_str());
     }
 
-    // Os "Shader Objects" podem ser marcados para deleção após serem linkados 
+    // Os "Shader Objects" podem ser marcados para deleção após serem linkados
     glDeleteShader(vertex_shader_id);
     glDeleteShader(fragment_shader_id);
 
@@ -1118,21 +1132,21 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da câmera com os deslocamentos
         g_CameraTheta -= 0.01f*dx;
         g_CameraPhi   += 0.01f*dy;
-    
+
         // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
         float phimax = 3.141592f/2;
         float phimin = -phimax;
-    
+
         if (g_CameraPhi > phimax)
             g_CameraPhi = phimax;
-    
+
         if (g_CameraPhi < phimin)
             g_CameraPhi = phimin;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1144,11 +1158,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_ForearmAngleZ -= 0.01f*dx;
         g_ForearmAngleX += 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1160,11 +1174,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_TorsoPositionX += 0.01f*dx;
         g_TorsoPositionY -= 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1215,30 +1229,38 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
     float delta = 3.141592 / 16; // 22.5 graus, em radianos.
 
-    if (key == GLFW_KEY_X && action == GLFW_PRESS)
+    if ((key == GLFW_KEY_W || key == GLFW_KEY_UP) && action == GLFW_PRESS)
     {
-        g_AngleX += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
+        keyInfo.forwards_held = true;
     }
 
-    if (key == GLFW_KEY_Y && action == GLFW_PRESS)
+    if ((key == GLFW_KEY_A || key == GLFW_KEY_LEFT) && action == GLFW_PRESS)
     {
-        g_AngleY += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
+        keyInfo.left_held = true;
     }
-    if (key == GLFW_KEY_Z && action == GLFW_PRESS)
+    if ((key == GLFW_KEY_D || key == GLFW_KEY_RIGHT) && action == GLFW_PRESS)
     {
-        g_AngleZ += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
+        keyInfo.right_held = true;
     }
-
-    // Se o usuário apertar a tecla espaço, resetamos os ângulos de Euler para zero.
-    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN || key == GLFW_KEY_SPACE) && action == GLFW_PRESS)
     {
-        g_AngleX = 0.0f;
-        g_AngleY = 0.0f;
-        g_AngleZ = 0.0f;
-        g_ForearmAngleX = 0.0f;
-        g_ForearmAngleZ = 0.0f;
-        g_TorsoPositionX = 0.0f;
-        g_TorsoPositionY = 0.0f;
+        keyInfo.brake_held = true;
+    }
+    if ((key == GLFW_KEY_W || key == GLFW_KEY_UP) && action == GLFW_RELEASE)
+    {
+        keyInfo.forwards_held = false;
+    }
+    if ((key == GLFW_KEY_A || key == GLFW_KEY_LEFT) && action == GLFW_RELEASE)
+    {
+        keyInfo.left_held = false;
+    }
+    if ((key == GLFW_KEY_D || key == GLFW_KEY_RIGHT) && action == GLFW_RELEASE)
+    {
+        keyInfo.right_held = false;
+    }
+    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN || key == GLFW_KEY_SPACE) && action == GLFW_RELEASE)
+    {
+        keyInfo.brake_held = false;
     }
 
     // Se o usuário apertar a tecla P, utilizamos projeção perspectiva.
@@ -1391,7 +1413,7 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
     if ( ellapsed_seconds > 1.0f )
     {
         numchars = snprintf(buffer, 20, "%.2f fps", ellapsed_frames / ellapsed_seconds);
-    
+
         old_seconds = seconds;
         ellapsed_frames = 0;
     }
@@ -1574,3 +1596,15 @@ void PrintObjModelInfo(ObjModel* model)
 // set makeprg=cd\ ..\ &&\ make\ run\ >/dev/null
 // vim: set spell spelllang=pt_br :
 
+void updateFromKeyboard(){
+
+    if(keyInfo.forwards_held) carInfo.addVelocity(0.01f);
+
+    if(keyInfo.left_held) carInfo.rotateY(0.01f);
+
+    if(keyInfo.right_held) carInfo.rotateY(-0.01f);
+
+    if(keyInfo.brake_held) carInfo.setVelocity(carInfo.getVelocity() * 0.9f);
+
+
+}
