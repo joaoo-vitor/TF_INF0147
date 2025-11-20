@@ -141,7 +141,7 @@ void TextRendering_PrintMatrixVectorProductDivW(GLFWwindow* window, glm::mat4 M,
 // Funções abaixo renderizam como texto na janela OpenGL algumas matrizes e
 // outras informações do programa. Definidas após main().
 void TextRendering_ShowModelViewProjection(GLFWwindow* window, glm::mat4 projection, glm::mat4 view, glm::mat4 model, glm::vec4 p_model);
-void TextRendering_ShowEulerAngles(GLFWwindow* window);
+void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel);
 void TextRendering_ShowProjection(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
 
@@ -311,7 +311,7 @@ int main(int argc, char* argv[])
     LoadShadersFromFiles();
 
     // Carregamos duas imagens para serem utilizadas como textura
-    LoadTextureImage("../../data/grass_texture.jpeg");      // TextureImage0
+    LoadTextureImage("../../data/track.jpg");      // TextureImage0
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel planemodel("../../data/plane.obj");
@@ -408,7 +408,7 @@ int main(int argc, char* argv[])
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -30.0f; // Posição do "far plane"
+        float farplane  = -300.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -457,7 +457,7 @@ int main(int argc, char* argv[])
 
         // Imprimimos na tela os ângulos de Euler que controlam a rotação do
         // terceiro cubo.
-        TextRendering_ShowEulerAngles(window);
+        TextRendering_ShowVelocity(window, carInfo.getVelocity());
 
         // Imprimimos na informação sobre a matriz de projeção sendo utilizada.
         TextRendering_ShowProjection(window);
@@ -1379,7 +1379,7 @@ void TextRendering_ShowModelViewProjection(
 
 // Escrevemos na tela os ângulos de Euler definidos nas variáveis globais
 // g_AngleX, g_AngleY, e g_AngleZ.
-void TextRendering_ShowEulerAngles(GLFWwindow* window)
+void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel)
 {
     if ( !g_ShowInfoText )
         return;
@@ -1387,7 +1387,7 @@ void TextRendering_ShowEulerAngles(GLFWwindow* window)
     float pad = TextRendering_LineHeight(window);
 
     char buffer[80];
-    snprintf(buffer, 80, "Euler Angles rotation matrix = Z(%.2f)*Y(%.2f)*X(%.2f)\n", g_AngleZ, g_AngleY, g_AngleX);
+    snprintf(buffer, 80, "Velocity: (X = %f) (Y = %f) (Z = %f) (Norm = %f)\n", vel.x, vel.y, vel.z, norm(vel));
 
     TextRendering_PrintString(window, buffer, -1.0f+pad/10, -1.0f+2*pad/10, 1.0f);
 }
@@ -1617,13 +1617,15 @@ void PrintObjModelInfo(ObjModel* model)
 
 void updateFromKeyboard(){
 
-    if(keyInfo.forwards_held) carInfo.accelerate();
+    if(keyInfo.forwards_held) carInfo.setAccelerate(true);
+    else carInfo.setAccelerate(false);
 
-    if(keyInfo.left_held) carInfo.rotateY(0.01f);
+    if(keyInfo.left_held) carInfo.turnLeft();
 
-    if(keyInfo.right_held) carInfo.rotateY(-0.01f);
+    if(keyInfo.right_held) carInfo.turnRight();
 
-    //if(keyInfo.brake_held) carInfo.setVelocity(carInfo.getVelocity() * 0.9f);
+    if(keyInfo.brake_held) carInfo.setBrake(true);
+    else carInfo.setBrake(false);
 
 
 }

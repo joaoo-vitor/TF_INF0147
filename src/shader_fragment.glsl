@@ -81,8 +81,8 @@ void main()
     {
         // PREENCHA AQUI
         // Propriedades espectrais do plano
-        U = position_world.x;
-        V = position_world.z;
+        U = position_world.x * 0.002f;
+        V = position_world.z * 0.002f;
         Kd = texture(TextureImage0, vec2(U,V)).rgb;
         Ks = vec3(0.0, 0.0, 0.0);
         Ka = vec3(0.0,0.0,0.0);
@@ -95,7 +95,7 @@ void main()
         Ks = vec3(0.0,0.0,0.0);
         Ka = vec3(0.0,0.0,0.0);
         q = 1.0;
-    }   
+    }
 
     // Espectro da fonte de iluminação
     vec3 I = vec3(1.0,1.0,1.0); // PREENCH AQUI o espectro da fonte de luz
@@ -133,5 +133,5 @@ void main()
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas
     color.rgb = pow(color.rgb, vec3(1.0,1.0,1.0)/2.2);
-} 
+}
 
