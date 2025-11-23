@@ -343,8 +343,8 @@ int main(int argc, char* argv[])
 
     // Ficamos em um loop infinito, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
-    {
-
+    {   
+        // Atuliza valores pro carro
         carInfo.update();
 
         // Aqui executamos as operações de renderização
@@ -391,6 +391,7 @@ int main(int argc, char* argv[])
 
         */
 
+        // Pega a câmera do carro
         const std::array<glm::vec4, 3> camera = carInfo.getCam1();
 
         glm::vec4 camera_position_c = camera[0]; // Ponto "c", centro da câmera
@@ -442,7 +443,7 @@ int main(int argc, char* argv[])
         #define PLANE 0
         #define CAR 1
 
-        // Desenhamos fff plano do chão
+        // _______________________>>_____________________>>>>  desenho dos objetos
         model = Matrix_Scale(200.0f, 1.0f, 200.0f);
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, PLANE);
@@ -454,6 +455,8 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, CAR);
         DrawVirtualObject("the_car");
+
+        // ________________________<<______________________<<<<<<
 
         // Imprimimos na tela os ângulos de Euler que controlam a rotação do
         // terceiro cubo.
@@ -1261,9 +1264,13 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     {
         keyInfo.right_held = true;
     }
-    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN || key == GLFW_KEY_SPACE) && action == GLFW_PRESS)
+    if ((key == GLFW_KEY_SPACE) && action == GLFW_PRESS)
     {
         keyInfo.brake_held = true;
+    }
+    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN) && action == GLFW_PRESS)
+    {
+        keyInfo.reverse_held = true;
     }
     if ((key == GLFW_KEY_W || key == GLFW_KEY_UP) && action == GLFW_RELEASE)
     {
@@ -1616,7 +1623,6 @@ void PrintObjModelInfo(ObjModel* model)
 // vim: set spell spelllang=pt_br :
 
 void updateFromKeyboard(){
-
     if(keyInfo.forwards_held) carInfo.setAccelerate(true);
     else carInfo.setAccelerate(false);
 
@@ -1627,5 +1633,10 @@ void updateFromKeyboard(){
     if(keyInfo.brake_held) carInfo.setBrake(true);
     else carInfo.setBrake(false);
 
-
+    if(keyInfo.reverse_held){
+        carInfo.setReverse(true);
+        carInfo.setAccelerate(true);
+    }else{
+        carInfo.setReverse(false);
+    };
 }
