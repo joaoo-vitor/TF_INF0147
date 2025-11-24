@@ -312,6 +312,7 @@ int main(int argc, char* argv[])
 
     // Carregamos duas imagens para serem utilizadas como textura
     LoadTextureImage("../../data/track.jpg");      // TextureImage0
+    LoadTextureImage("../../data/sky.jpg");  // TextureImage1
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel planemodel("../../data/plane.obj");
@@ -321,6 +322,10 @@ int main(int argc, char* argv[])
     ObjModel carmodel("../../data/Car.obj");
     ComputeNormals(&carmodel);
     BuildTrianglesAndAddToVirtualScene(&carmodel);
+
+    ObjModel sphereModel("../../data/sphere.obj");
+    ComputeNormals(&sphereModel);
+    BuildTrianglesAndAddToVirtualScene(&sphereModel);
 
     carInfo.setVelocity(0.0f);
 
@@ -442,8 +447,20 @@ int main(int argc, char* argv[])
 
         #define PLANE 0
         #define CAR 1
+        #define SKYBOX 2
 
         // _______________________>>_____________________>>>>  desenho dos objetos
+
+        // skybox is behind everything
+         model =  Matrix_Translate(carInfo.getPosition().x,
+                     carInfo.getPosition().y,
+                     carInfo.getPosition().z)
+             * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // huge sphere
+        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(g_object_id_uniform, SKYBOX);
+        DrawVirtualObject("the_sphere");
+
+
         model = Matrix_Scale(200.0f, 1.0f, 200.0f);
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, PLANE);
@@ -455,6 +472,7 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, CAR);
         DrawVirtualObject("the_car");
+
 
         // ________________________<<______________________<<<<<<
 
@@ -626,6 +644,7 @@ void LoadShadersFromFiles()
     // Variáveis em "shader_fragment.glsl" para acesso das imagens de textura
     glUseProgram(g_GpuProgramID);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage0"), 0);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage1"), 1);
     glUseProgram(0);
 }
 
