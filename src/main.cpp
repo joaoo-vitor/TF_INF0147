@@ -142,6 +142,7 @@ void TextRendering_PrintMatrixVectorProductDivW(GLFWwindow* window, glm::mat4 M,
 // outras informações do programa. Definidas após main().
 void TextRendering_ShowModelViewProjection(GLFWwindow* window, glm::mat4 projection, glm::mat4 view, glm::mat4 model, glm::vec4 p_model);
 void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel);
+void TextRendering_ShowRotation(GLFWwindow* window, const glm::vec3 &rotation);
 void TextRendering_ShowProjection(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
 
@@ -169,6 +170,10 @@ struct SceneObject
     glm::vec3    bbox_min; // Axis-Aligned Bounding Box do objeto
     glm::vec3    bbox_max;
 };
+
+// Constantes
+const float verysmallnumber = std::numeric_limits<float>::epsilon();
+
 
 // Abaixo definimos variáveis globais utilizadas em várias funções do código.
 
@@ -201,7 +206,7 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // renderização.
 float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 3.5f; // Distância da câmera para a origem
+float g_CameraDistance = 12.0f; // Distância da câmera para a origem
 
 // Variáveis que controlam rotação do antebraço
 float g_ForearmAngleZ = 0.0f;
@@ -216,6 +221,13 @@ bool g_UsePerspectiveProjection = true;
 
 // Variável que controla se o texto informativo será mostrado na tela.
 bool g_ShowInfoText = true;
+
+// Variável para dizer que a câmera está sendo girada pelo usuário
+// Se estiver desligada, fica travada no carro (se estiver no modo look_at)
+bool freeLookAt=false;
+
+// Flag para dizer que é camera livre ou não
+bool freeCamera=false;
 
 // Variáveis que definem um programa de GPU (shaders). Veja função LoadShadersFromFiles().
 GLuint g_GpuProgramID = 0;
@@ -310,22 +322,28 @@ int main(int argc, char* argv[])
     //
     LoadShadersFromFiles();
 
-    // Carregamos duas imagens para serem utilizadas como textura
-    LoadTextureImage("../../data/track.jpg");      // TextureImage0
-    LoadTextureImage("../../data/sky.jpg");  // TextureImage1
+    // ________________________>>_______________________>>>>>>  Load de texturas
+        // Carregamos duas imagens para serem utilizadas como textura
+        LoadTextureImage("../../data/track.jpg");      // TextureImage0
+        LoadTextureImage("../../data/sky.jpg");  // TextureImage1
+    // ________________________<<_______________________<<<<<<
 
-    // Construímos a representação de objetos geométricos através de malhas de triângulos
-    ObjModel planemodel("../../data/plane.obj");
-    ComputeNormals(&planemodel);
-    BuildTrianglesAndAddToVirtualScene(&planemodel);
 
-    ObjModel carmodel("../../data/Car.obj");
-    ComputeNormals(&carmodel);
-    BuildTrianglesAndAddToVirtualScene(&carmodel);
+    // _______________________>>_______________________>>>>>>  Load de objetos
 
-    ObjModel sphereModel("../../data/sphere.obj");
-    ComputeNormals(&sphereModel);
-    BuildTrianglesAndAddToVirtualScene(&sphereModel);
+        // Construímos a representação de objetos geométricos através de malhas de triângulos
+        ObjModel planemodel("../../data/plane.obj");
+        ComputeNormals(&planemodel);
+        BuildTrianglesAndAddToVirtualScene(&planemodel);
+
+        ObjModel carmodel("../../data/Car.obj");
+        ComputeNormals(&carmodel);
+        BuildTrianglesAndAddToVirtualScene(&carmodel);
+
+        ObjModel sphereModel("../../data/sphere.obj");
+        ComputeNormals(&sphereModel);
+        BuildTrianglesAndAddToVirtualScene(&sphereModel);
+    // _______________________<<_______________________<<<<<<
 
     carInfo.setVelocity(0.0f);
 
@@ -370,46 +388,40 @@ int main(int argc, char* argv[])
         // os shaders de vértice e fragmentos).
         glUseProgram(g_GpuProgramID);
 
-        // Computamos a posição da câmera utilizando coordenadas esféricas.  As
-        // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
-        // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
-        // e ScrollCallback().
+        // _______________________>>_____________________>>>>  Camera settings
+        
+            // Computamos a posição da câmera utilizando coordenadas esféricas.  As
+            // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
+            // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
+            // e ScrollCallback().
 
-        //glm::vec4 camera_position_c = carInfo.getPosition()
+            
+            if (!freeLookAt){
+                g_CameraPhi = carInfo.getCameraPhi();
+                g_CameraTheta = carInfo.getCameraTheta();
+            }
 
-        /*
-        float r = g_CameraDistance;
-        float y = r*sin(g_CameraPhi);
-        float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
-        float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+            float r = g_CameraDistance;
+            float y = r*sin(g_CameraPhi);
+            float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
+            float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
 
-        */
+            // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
+            // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
+            glm::vec4 camera_position_c  = carInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
+            glm::vec4 camera_lookat_l    = carInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+            glm::vec4 camera_view_vector = normalize(camera_lookat_l - camera_position_c); // Vetor "view", sentido para onde a câmera está virada
+            glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
 
-        /*
+            // Computamos a matriz "View" utilizando os parâmetros da câmera para
+            // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
+            glm::mat4 view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
 
-        // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
-        // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-        glm::vec4 camera_position_c  = glm::vec4(x,y,z,1.0f); // Ponto "c", centro da câmera
-        glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
-        glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
-        glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
-
-        */
-
-        // Pega a câmera do carro
-        const std::array<glm::vec4, 3> camera = carInfo.getCam1();
-
-        glm::vec4 camera_position_c = camera[0]; // Ponto "c", centro da câmera
-        glm::vec4 camera_view_vector = camera[1] ; // Vetor "view", sentido para onde a câmera está virada
-        glm::vec4 camera_up_vector = camera[2] ; // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+            // Agora computamos a matriz de Projeção.
+            glm::mat4 projection;
+        // _______________________<<_______________________<<<<<<
 
 
-        // Computamos a matriz "View" utilizando os parâmetros da câmera para
-        // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-        glm::mat4 view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
-
-        // Agora computamos a matriz de Projeção.
-        glm::mat4 projection;
 
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
@@ -479,6 +491,7 @@ int main(int argc, char* argv[])
         // Imprimimos na tela os ângulos de Euler que controlam a rotação do
         // terceiro cubo.
         TextRendering_ShowVelocity(window, carInfo.getVelocity());
+        TextRendering_ShowRotation(window, carInfo.getRotation());
 
         // Imprimimos na informação sobre a matriz de projeção sendo utilizada.
         TextRendering_ShowProjection(window);
@@ -1117,12 +1130,14 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
         // com o botão esquerdo pressionado.
         glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
         g_LeftMouseButtonPressed = true;
+        freeLookAt=true;
     }
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
         // Quando o usuário soltar o botão esquerdo do mouse, atualizamos a
         // variável abaixo para false.
         g_LeftMouseButtonPressed = false;
+        freeLookAt=false;
     }
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
@@ -1178,9 +1193,9 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         g_CameraTheta -= 0.01f*dx;
         g_CameraPhi   += 0.01f*dy;
 
-        // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
-        float phimax = 3.141592f/2;
-        float phimin = -phimax;
+        // phimax is when the camera is (almost) looking straight down
+        float phimax = 3.141592f/2-0.01;
+        float phimin = 0.01; // minimo para não olhar por baixo do plano
 
         if (g_CameraPhi > phimax)
             g_CameraPhi = phimax;
@@ -1239,7 +1254,6 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     // definição do sistema de coordenadas da câmera. Isto é, a variável abaixo
     // nunca pode ser zero. Versões anteriores deste código possuíam este bug,
     // o qual foi detectado pelo aluno Vinicius Fraga (2017/2).
-    const float verysmallnumber = std::numeric_limits<float>::epsilon();
     if (g_CameraDistance < verysmallnumber)
         g_CameraDistance = verysmallnumber;
 }
@@ -1403,8 +1417,7 @@ void TextRendering_ShowModelViewProjection(
     TextRendering_PrintMatrixVectorProductMoreDigits(window, viewport_mapping, p_ndc, -1.0f, 1.0f-26*pad, 1.0f);
 }
 
-// Escrevemos na tela os ângulos de Euler definidos nas variáveis globais
-// g_AngleX, g_AngleY, e g_AngleZ.
+// Debug da velocidade
 void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel)
 {
     if ( !g_ShowInfoText )
@@ -1416,6 +1429,20 @@ void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel)
     snprintf(buffer, 80, "Velocity: (X = %f) (Y = %f) (Z = %f) (Norm = %f)\n", vel.x, vel.y, vel.z, norm(vel));
 
     TextRendering_PrintString(window, buffer, -1.0f+pad/10, -1.0f+2*pad/10, 1.0f);
+}
+
+// Debug da Rotação do modelo do carro
+void TextRendering_ShowRotation(GLFWwindow* window, const glm::vec3 &rotation)
+{
+    if ( !g_ShowInfoText )
+        return;
+
+    float pad = TextRendering_LineHeight(window);
+
+    char buffer[80];
+    snprintf(buffer, 80, "Rotation Matrix: (X = %f) (Y = %f) (Z = %f)\n", rotation.x, rotation.y, rotation.z);
+
+    TextRendering_PrintString(window, buffer, -1.0f+pad/10, -1.0f+12*pad/10, 1.0f);
 }
 
 // Escrevemos na tela qual matriz de projeção está sendo utilizada.
@@ -1659,3 +1686,7 @@ void updateFromKeyboard(){
         carInfo.setReverse(false);
     };
 }
+
+
+// _______________________>>_______________________>>>>>>  Sample section
+// __________"_____________<<_______________________<<<<<<

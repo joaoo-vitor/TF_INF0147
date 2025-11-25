@@ -214,7 +214,7 @@ float dotproduct(glm::vec4 u, glm::vec4 v)
     if ( u4 != 0.0f || v4 != 0.0f )
     {
         fprintf(stderr, "ERROR: Produto escalar não definido para pontos.\n");
-        std::exit(EXIT_FAILURE);
+        throw std::invalid_argument( "ERROR: Produto escalar não definido para pontos.\n" );
     }
 
     return u1*v1 + u2*v2 + u3*v3;
@@ -229,6 +229,7 @@ glm::mat4 Matrix_Camera_View(glm::vec4 position_c, glm::vec4 view_vector, glm::v
     // Normalizamos os vetores u e w
     w = w / norm(w);
     u = u / norm(u);
+    
 
     glm::vec4 v = crossproduct(w,u);
 

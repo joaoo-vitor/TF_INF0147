@@ -7,7 +7,6 @@
 #include <numeric>
 #include <iostream>
 
-
 #define M_PI   3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
 
@@ -24,6 +23,8 @@
 #define ZERO_TURNANGLE_THRESHOLD 0.0066f
 #define ZERO_TURNVEL_THRESHOLD 0.0006f
 
+#define CAMERA_INITIAL_HEIGHT 8.0f
+
 class Car
 {
 private:
@@ -37,12 +38,14 @@ private:
     bool reverse;
     float turnAngle;
 
+    
 public:
     // Carro começa no centro (0,0,0)
     // Velocidade zero
     // É rotacionado em X inicialmente apenas para que seu modelo fique certo (horizontal)
     Car(){
         position = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        // rotation = glm::vec3(0.0f, 0.0f, 0.0f);
         rotation = glm::vec3(-M_PI_2, 0.0f, 0.0f);
         velocity = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         forwardsVector = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
@@ -53,6 +56,36 @@ public:
         reverse = false;
     };
 
+    // Valor de theta e phi calculados para esse modelo:
+    //          ___3___.(camera)
+    //         |      /          
+    //         |     /       
+    //         |    /     
+    //         6   /    
+    //         |  /
+    //         | /
+    //     .-> ./
+    //     |           |
+    //    (0,3,0)      |
+    //    (no inicio)  3
+    //         .       |
+    //   (car position)    
+    //      <--------
+    glm::vec3 calculateCameraViewVector(){
+        glm::vec3 cameraLookAt = glm::vec3(0.0f,3.0f,0.0f);
+        glm::vec3 cameraPos = glm::vec3(0.0f,CAMERA_INITIAL_HEIGHT,-7.0f);
+        return cameraLookAt - cameraPos;
+    }
+    float getCameraTheta(){
+        glm::vec3 v = normalize(calculateCameraViewVector());
+
+        // When retrieving the theta, consider the car rotation as well
+        return std::atan2(v.x, v.y)+rotation.y;
+    }
+    float getCameraPhi(){
+        glm::vec3 v = normalize(calculateCameraViewVector());
+        return std::acos(v.z);
+    }
     glm::mat4 getTranslationMatrix(){
         return Matrix_Translate(position.x, position.y, position.z);
     }
@@ -79,18 +112,6 @@ public:
     }
     glm::vec4 getPosition(){
         return position;
-    }
-    std::array<glm::vec4, 3> getCam1(){
-    	std::array<glm::vec4, 3> camera{};
-    	glm::vec4 forwards = glm::length(velocity) == 0.0f ? forwardsVector : glm::normalize(velocity);
-    	camera[0] = position + glm::vec4(0.0f, 6.0f, 0.0f, 0.0f) - 9.0f * forwards;
-    	camera[1] = position + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f) - camera[0];
-    	camera[2] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-
-        return camera;
-    }
-    glm::vec4 getCam1Lookat(){
-        return position + glm::vec4(0.0f, 3.5f, 0.0f, 0.0f);
     }
     void turnRight(){
         turnAngle -= 0.001f;
@@ -219,6 +240,10 @@ public:
     
     void updateForwardsVector(){
     	forwardsVector = getMatrixRotate() * glm::vec4(0.0f, - 1.0f, 0.0f, 0.0f);    
+    }
+
+    glm::vec3 getRotation(){
+        return rotation;
     }
     
     void update(){ 
