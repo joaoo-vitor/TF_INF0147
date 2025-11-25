@@ -141,7 +141,7 @@ void TextRendering_PrintMatrixVectorProductDivW(GLFWwindow* window, glm::mat4 M,
 // Funções abaixo renderizam como texto na janela OpenGL algumas matrizes e
 // outras informações do programa. Definidas após main().
 void TextRendering_ShowModelViewProjection(GLFWwindow* window, glm::mat4 projection, glm::mat4 view, glm::mat4 model, glm::vec4 p_model);
-void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel);
+void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel, bool isSliding);
 void TextRendering_ShowRotation(GLFWwindow* window, const glm::vec3 &rotation);
 void TextRendering_ShowProjection(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
@@ -154,6 +154,11 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+
+// Funcoes para calculo do tempo fisico.
+float timeOfLastFrame;
+float timeSinceLastFrame();
+void setEndFrameTime();
 
 // Funcao de atualizacao de estado por dados do teclado
 void updateFromKeyboard();
@@ -222,12 +227,16 @@ bool g_UsePerspectiveProjection = true;
 // Variável que controla se o texto informativo será mostrado na tela.
 bool g_ShowInfoText = true;
 
-// Variável para dizer que a câmera está sendo girada pelo usuário
-// Se estiver desligada, fica travada no carro (se estiver no modo look_at)
-bool freeLookAt=false;
+// Variável para dizer o tipo de camera sendo utilizada
+enum cameraType{
+    freeCamera,
+    freeLookAt,
+    lockedLookAt,
+    slidingLookAt
+};
 
-// Flag para dizer que é camera livre ou não
-bool freeCamera=false;
+enum cameraType g_lastType = lockedLookAt;
+enum cameraType g_cameraType = lockedLookAt;
 
 // Variáveis que definem um programa de GPU (shaders). Veja função LoadShadersFromFiles().
 GLuint g_GpuProgramID = 0;
@@ -325,7 +334,8 @@ int main(int argc, char* argv[])
     // ________________________>>_______________________>>>>>>  Load de texturas
         // Carregamos duas imagens para serem utilizadas como textura
         LoadTextureImage("../../data/track.jpg");      // TextureImage0
-        LoadTextureImage("../../data/sky.jpg");  // TextureImage1
+        LoadTextureImage("../../data/Texturelabs_Sky_143M.jpg");  // TextureImage1
+        //LoadTextureImage("../../data/sky.jpg");  // TextureImage2
     // ________________________<<_______________________<<<<<<
 
 
@@ -344,8 +354,6 @@ int main(int argc, char* argv[])
         ComputeNormals(&sphereModel);
         BuildTrianglesAndAddToVirtualScene(&sphereModel);
     // _______________________<<_______________________<<<<<<
-
-    carInfo.setVelocity(0.0f);
 
     if ( argc > 1 )
     {
@@ -366,9 +374,7 @@ int main(int argc, char* argv[])
 
     // Ficamos em um loop infinito, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
-    {   
-        // Atuliza valores pro carro
-        carInfo.update();
+    {
 
         // Aqui executamos as operações de renderização
 
@@ -388,17 +394,36 @@ int main(int argc, char* argv[])
         // os shaders de vértice e fragmentos).
         glUseProgram(g_GpuProgramID);
 
+
+        if (g_LeftMouseButtonPressed){
+            g_cameraType = freeLookAt;}
+        else if(carInfo.getIsSliding()){
+            g_cameraType = slidingLookAt;}
+        else{
+            g_cameraType = lockedLookAt;}
+
         // _______________________>>_____________________>>>>  Camera settings
-        
+
             // Computamos a posição da câmera utilizando coordenadas esféricas.  As
             // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
             // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
             // e ScrollCallback().
 
-            
-            if (!freeLookAt){
-                g_CameraPhi = carInfo.getCameraPhi();
-                g_CameraTheta = carInfo.getCameraTheta();
+            // Todo: Ajeitar
+            switch (g_cameraType){
+                case freeLookAt:
+
+                    break;
+                case lockedLookAt:
+                    g_CameraPhi = carInfo.getCameraPhi();
+                    g_CameraTheta = carInfo.getCameraTheta();
+                    break;
+                case slidingLookAt:
+                    g_CameraPhi = carInfo.getCameraPhi();
+                    g_CameraTheta = carInfo.getCameraTheta();
+                    break;
+                default:;
+
             }
 
             float r = g_CameraDistance;
@@ -426,7 +451,7 @@ int main(int argc, char* argv[])
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -300.0f; // Posição do "far plane"
+        float farplane  = -450.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -464,9 +489,7 @@ int main(int argc, char* argv[])
         // _______________________>>_____________________>>>>  desenho dos objetos
 
         // skybox is behind everything
-         model =  Matrix_Translate(carInfo.getPosition().x,
-                     carInfo.getPosition().y,
-                     carInfo.getPosition().z)
+         model =  carInfo.getTranslationMatrix()
              * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // huge sphere
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, SKYBOX);
@@ -490,11 +513,11 @@ int main(int argc, char* argv[])
 
         // Imprimimos na tela os ângulos de Euler que controlam a rotação do
         // terceiro cubo.
-        TextRendering_ShowVelocity(window, carInfo.getVelocity());
+        TextRendering_ShowVelocity(window, carInfo.getVelocity(), carInfo.getIsSliding());
         TextRendering_ShowRotation(window, carInfo.getRotation());
 
         // Imprimimos na informação sobre a matriz de projeção sendo utilizada.
-        TextRendering_ShowProjection(window);
+        //TextRendering_ShowProjection(window);
 
         // Imprimimos na tela informação sobre o número de quadros renderizados
         // por segundo (frames per second).
@@ -514,7 +537,14 @@ int main(int argc, char* argv[])
         // pela biblioteca GLFW.
         glfwPollEvents();
 
+        // Atualiza as variaveis de movimentaçao com base no teclado.
         updateFromKeyboard();
+
+        // Atuliza valores pro carro
+        carInfo.update(timeSinceLastFrame());
+
+        // Atualiza o tempo do ultimo frame
+        setEndFrameTime();
 
 
     }
@@ -575,7 +605,7 @@ void LoadTextureImage(const char* filename)
 
     stbi_image_free(data);
 
-    g_NumLoadedTextures += 1;
+    g_NumLoadedTextures ++;
 }
 
 // Função que desenha um objeto armazenado em g_VirtualScene. Veja definição
@@ -658,6 +688,7 @@ void LoadShadersFromFiles()
     glUseProgram(g_GpuProgramID);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage1"), 1);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage2"), 2);
     glUseProgram(0);
 }
 
@@ -1130,14 +1161,12 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
         // com o botão esquerdo pressionado.
         glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
         g_LeftMouseButtonPressed = true;
-        freeLookAt=true;
     }
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
         // Quando o usuário soltar o botão esquerdo do mouse, atualizamos a
         // variável abaixo para false.
         g_LeftMouseButtonPressed = false;
-        freeLookAt=false;
     }
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
@@ -1185,6 +1214,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 
     if (g_LeftMouseButtonPressed)
     {
+
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
@@ -1418,15 +1448,15 @@ void TextRendering_ShowModelViewProjection(
 }
 
 // Debug da velocidade
-void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel)
+void TextRendering_ShowVelocity(GLFWwindow* window, const glm::vec4 &vel, bool isSliding)
 {
     if ( !g_ShowInfoText )
         return;
 
     float pad = TextRendering_LineHeight(window);
 
-    char buffer[80];
-    snprintf(buffer, 80, "Velocity: (X = %f) (Y = %f) (Z = %f) (Norm = %f)\n", vel.x, vel.y, vel.z, norm(vel));
+    char buffer[100];
+    snprintf(buffer, 100, "Velocity: (X = %f) (Y = %f) (Z = %f) (Norm = %f) (isSliding? %s)\n", vel.x, vel.y, vel.z, norm(vel), isSliding ? "True" : "False");
 
     TextRendering_PrintString(window, buffer, -1.0f+pad/10, -1.0f+2*pad/10, 1.0f);
 }
@@ -1459,6 +1489,20 @@ void TextRendering_ShowProjection(GLFWwindow* window)
     else
         TextRendering_PrintString(window, "Orthographic", 1.0f-13*charwidth, -1.0f+2*lineheight/10, 1.0f);
 }
+
+// Escrevemos na tela o número de quadros renderizados por segundo (frames per
+// second).
+float timeSinceLastFrame(){
+
+    return ((float)glfwGetTime() - timeOfLastFrame) + verysmallnumber;
+
+}
+void setEndFrameTime(){
+
+    timeOfLastFrame = (float)glfwGetTime();
+
+}
+
 
 // Escrevemos na tela o número de quadros renderizados por segundo (frames per
 // second).

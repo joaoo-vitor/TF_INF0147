@@ -33,6 +33,7 @@ uniform vec4 bbox_max;
 
 uniform sampler2D TextureImage0;
 uniform sampler2D TextureImage1;
+uniform sampler2D TextureImage2;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec4 color;
@@ -83,7 +84,7 @@ void main()
     if ( object_id == CAR )
     {
         light_model=LIGHT_MODEL_BLINNPHONG;
-        
+
         // Propriedades espectrais do carro
         Kd = vec3(0.05, 0.05, 0.05);
         Ks = vec3(0.08, 0.08, 0.08);
@@ -107,10 +108,10 @@ void main()
         vec3 bbox_center = ((bbox_min + bbox_max) / 2.0).xyz;
         vec3 p_linha = normalize(position_model.xyz - bbox_center);
 
-        if (p_linha.y < 0) return;
+        //if (p_linha.y < 0) return;
         // Convert direction into spherical coordinates
         float U = atan(p_linha.z, p_linha.x) / (2.0 * M_PI) + 0.5;
-        float V = p_linha.y;  // simple: height maps directly to y
+        float V = asin(p_linha.y);  // simple: height maps directly to y
 
         Kd = texture(TextureImage1, vec2(U,V)).rgb;
         Ks = vec3(0.0, 0.0, 0.0);
@@ -125,7 +126,7 @@ void main()
         Ka = vec3(0.0,0.0,0.0);
         q = 1.0;
     }
-    
+
     // Define o modelo de iluminação a partir do tipo
     if(light_model == LIGHT_MODEL_BLINNPHONG){
         // TODO - modelo blin phong
@@ -143,7 +144,7 @@ void main()
         vec3 ambient_term = Ka * Ia; // O termo ambiente
         color.rgb = lambert_diffuse_term + ambient_term;
     } else {
-        color.rgb=Kd;
+        color.rgb = Kd;
     }
 
     color.a = 1;
