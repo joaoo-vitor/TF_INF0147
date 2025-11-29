@@ -12,7 +12,7 @@
 #define M_PI_2 1.57079632679489661923
 
 #define MAX_VEL 50.0f // 3e-3 unidades por frame
-#define ACCELERATION 0.5f
+#define ACCELERATION 10.0f
 #define ACCELERATION_REVERSE 0.0001f
 #define BRAKE_ACCELERATION 0.0005f
 
@@ -31,11 +31,11 @@
 #define SLIDING_TURN_COEFICIENT 6.00f
 #define NOT_SLIDING_TURN_COEFICIENT 0.30f
 
-#define TURN_SPEED_COEFICIENT 0.01f
+#define TURN_SPEED_COEFICIENT 0.6f
 
 #define ACCELERATE_TYRE_SPEED_COEFICIENT 60.0f
 
-#define SLIDING_DRAG_COEFICIENT 0.7f
+#define SLIDING_DRAG_COEFICIENT 20.0f
 
 
 class Car
@@ -131,11 +131,11 @@ public:
     glm::vec4 getPosition(){
         return position;
     }
-    void turnRight(){
-        turnAngle -= TURN_SPEED_COEFICIENT;
+    void turnRight(float elapsed_time){
+        turnAngle -= TURN_SPEED_COEFICIENT * elapsed_time;
     }
-    void turnLeft(){
-        turnAngle += TURN_SPEED_COEFICIENT;
+    void turnLeft(float elapsed_time){
+        turnAngle += TURN_SPEED_COEFICIENT * elapsed_time;
     }
 
     void updatePosition(float elapsed_time){
@@ -183,7 +183,7 @@ public:
 
 		velocity -= forwardsVector * tyreSpeed;
 
-		velocity -= norm(velocity) > mass * SLIDING_DRAG_COEFICIENT? normalize(velocity) * mass * SLIDING_DRAG_COEFICIENT : velocity;
+		velocity -= elapsed_time * (norm(velocity) > mass * SLIDING_DRAG_COEFICIENT? normalize(velocity) * mass * SLIDING_DRAG_COEFICIENT : velocity);
 
 		velocity += forwardsVector * tyreSpeed;
 
@@ -193,7 +193,7 @@ public:
 
 		forwards = normalize(forwards);
 
-		velocity = forwards * (norm(velocity) + (accelerate ? ACCELERATION : 0.0f));
+		velocity = forwards * (norm(velocity) + (accelerate ? ACCELERATION : 0.0f) * elapsed_time);
 
 	}
 	if(norm(velocity)>=MAX_VEL){
@@ -202,7 +202,7 @@ public:
         	
         }
 	
-	if(!accelerate && !brake) velocity *= 1 - VELOCITY_DECAY_RATIO;
+	if(!accelerate && !brake) velocity *= 1 - VELOCITY_DECAY_RATIO * elapsed_time;
 	
     }
 

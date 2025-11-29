@@ -1716,9 +1716,11 @@ void updateFromKeyboard(){
     if(keyInfo.forwards_held) carInfo.setAccelerate(true);
     else carInfo.setAccelerate(false);
 
-    if(keyInfo.left_held) carInfo.turnLeft();
+    float elapsed_time = timeSinceLastFrame();
 
-    if(keyInfo.right_held) carInfo.turnRight();
+    if(keyInfo.left_held) carInfo.turnLeft(elapsed_time);
+
+    if(keyInfo.right_held) carInfo.turnRight(elapsed_time);
 
     if(keyInfo.brake_held) carInfo.setBrake(true);
     else carInfo.setBrake(false);
