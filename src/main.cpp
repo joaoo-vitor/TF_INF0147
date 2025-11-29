@@ -159,6 +159,7 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 float timeOfLastFrame;
 float timeSinceLastFrame();
 void setEndFrameTime();
+float g_elapsed_time;
 
 // Funcao de atualizacao de estado por dados do teclado
 void updateFromKeyboard();
@@ -334,7 +335,7 @@ int main(int argc, char* argv[])
     // ________________________>>_______________________>>>>>>  Load de texturas
         // Carregamos duas imagens para serem utilizadas como textura
         LoadTextureImage("../../data/track.jpg");      // TextureImage0
-        LoadTextureImage("../../data/Texturelabs_Sky_143M.jpg");  // TextureImage1
+        LoadTextureImage("../../data/sky.jpg");  // TextureImage1
         //LoadTextureImage("../../data/sky.jpg");  // TextureImage2
     // ________________________<<_______________________<<<<<<
 
@@ -541,7 +542,7 @@ int main(int argc, char* argv[])
         updateFromKeyboard();
 
         // Atuliza valores pro carro
-        carInfo.update(timeSinceLastFrame());
+        carInfo.update(g_elapsed_time = timeSinceLastFrame());
 
         // Atualiza o tempo do ultimo frame
         setEndFrameTime();
@@ -1716,11 +1717,9 @@ void updateFromKeyboard(){
     if(keyInfo.forwards_held) carInfo.setAccelerate(true);
     else carInfo.setAccelerate(false);
 
-    float elapsed_time = timeSinceLastFrame();
+    if(keyInfo.left_held) carInfo.turnLeft(g_elapsed_time);
 
-    if(keyInfo.left_held) carInfo.turnLeft(elapsed_time);
-
-    if(keyInfo.right_held) carInfo.turnRight(elapsed_time);
+    if(keyInfo.right_held) carInfo.turnRight(g_elapsed_time);
 
     if(keyInfo.brake_held) carInfo.setBrake(true);
     else carInfo.setBrake(false);

@@ -18,11 +18,11 @@
 
 #define VELOCITY_DECAY_RATIO 0.01f
 #define SIDE_VELOCITY_DECAY_RATIO 0.025f
-#define TURNING_DECAY_RATIO 0.1f
+#define TURNING_DECAY_RATIO 5.0f
 
-#define ZERO_VELOCITY_THRESHOLD 0.00006f
-#define ZERO_TURNANGLE_THRESHOLD 0.0066f
-#define ZERO_TURNVEL_THRESHOLD 0.0006f
+#define ZERO_VELOCITY_THRESHOLD 0.000006f
+#define ZERO_TURNANGLE_THRESHOLD 0.000066f
+#define ZERO_TURNVEL_THRESHOLD 0.000006f
 
 #define CAMERA_INITIAL_HEIGHT 8.0f
 
@@ -156,7 +156,7 @@ public:
             rotation.y += turnAngle * NOT_SLIDING_TURN_COEFICIENT * norm(velocity) * elapsed_time;
 
 
-        turnAngle *= 1-TURNING_DECAY_RATIO; // Decaimento do ângulo de curva
+        turnAngle *= 1 - TURNING_DECAY_RATIO * elapsed_time; // Decaimento do ângulo de curva
 
         // Threshhold para zerar curva
         if(std::fabs(turnAngle) < ZERO_TURNANGLE_THRESHOLD) turnAngle = 0.0f;
