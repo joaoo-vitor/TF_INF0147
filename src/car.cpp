@@ -60,8 +60,7 @@ public:
     // É rotacionado em X inicialmente apenas para que seu modelo fique certo (horizontal)
     Car(){
         position = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        // rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-        rotation = glm::vec3(-M_PI_2, 0.0f, 0.0f);
+        rotation = glm::vec3(0.0f, 0.0f, 0.0f);
         velocity = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         forwardsVector = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
         brake = false;
@@ -207,7 +206,7 @@ public:
     }
 
     void updateForwardsVector(){
-    	forwardsVector = getMatrixRotate() * glm::vec4(0.0f, - 1.0f, 0.0f, 0.0f);
+    	forwardsVector = getMatrixRotate() * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
     }
 
     glm::vec3 getRotation(){

@@ -158,11 +158,9 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
-// Funcoes para calculo do tempo fisico.
-float timeOfLastFrame;
+// Funcoes para calculo do tempo de execução
 float timeSinceLastFrame();
 void setEndFrameTime();
-float g_elapsed_time;
 
 // Funcao de atualizacao de estado por dados do teclado
 void updateFromKeyboard();
@@ -182,7 +180,6 @@ struct SceneObject
 
 // Constantes
 const float verysmallnumber = std::numeric_limits<float>::epsilon();
-
 
 // Abaixo definimos variáveis globais utilizadas em várias funções do código.
 
@@ -255,12 +252,14 @@ GLint g_bbox_max_uniform;
 GLuint g_NumLoadedTextures = 0;
 
 // Struct com informacoes do teclado
-
 KEYBOARD keyInfo;
-
 
 // Objeto com informacoes fisicas do carro
 Car carInfo = Car();
+
+// Variávels para controle do tempo de execução
+float g_TimeOfLastFrame;
+float g_ElapsedTime;
 
 int main(int argc, char* argv[])
 {
@@ -352,7 +351,19 @@ int main(int argc, char* argv[])
         ComputeNormals(&planemodel);
         BuildTrianglesAndAddToVirtualScene(&planemodel);
 
-        ObjModel carmodel("../../data/Car.obj");
+        // Carregamos partes do carro
+        // Grupos pertencentes ao objeto:
+        /*
+        - Objeto 'placas'
+        - Objeto 'roda_anterior_esquerda'
+        - Objeto 'roda_dianteira_esquerda'
+        - Objeto 'roda_anterior_direita'
+        - Objeto 'roda_dianteira_direita'
+        - Objeto 'logo'
+        - Objeto 'corpo'
+        - Objeto 'vidros'
+        */
+        ObjModel carmodel("../../data/carro_agrupado.obj");
         ComputeNormals(&carmodel);
         BuildTrianglesAndAddToVirtualScene(&carmodel);
 
@@ -497,31 +508,56 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
         #define PLANE 0
-        #define CAR 1
-        #define SKYBOX 2
+        #define SKYBOX 1
+        #define CAR_BODY 2
+        #define CAR_PLAQUES 3
+        #define CAR_TYRES 4
+        #define CAR_GLASSES 5
 
         // _______________________>>_____________________>>>>  desenho dos objetos
 
-        // Skybox primeiro, pois fica atrás de tudo
-         model =  carInfo.getTranslationMatrix()
-             * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // esfera gigante
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, SKYBOX);
-        DrawVirtualObject("the_sphere");
+            // Skybox primeiro, pois fica atrás de tudo
+            model =  carInfo.getTranslationMatrix()
+                * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // esfera gigante
+            glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, SKYBOX);
+            DrawVirtualObject("the_sphere");
 
-        model = Matrix_Scale(200.0f, 1.0f, 200.0f);
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, PLANE);
-        DrawVirtualObject("the_plane");
-
-        model = carInfo.getTranslationMatrix()*
-        Matrix_Scale(0.03f, 0.03f, 0.03f)*
-        carInfo.getMatrixRotate();
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, CAR);
-        DrawVirtualObject("the_car");
+            model = Matrix_Scale(200.0f, 1.0f, 200.0f);
+            glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, PLANE);
+            DrawVirtualObject("the_plane");
 
 
+            // Desenhamos as partes do carro
+            PushMatrix(model);
+                model = carInfo.getTranslationMatrix()*
+                Matrix_Scale(0.03f, 0.03f, 0.03f)*
+                carInfo.getMatrixRotate();
+                
+                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                glUniform1i(g_object_id_uniform, CAR_BODY);
+                DrawVirtualObject("the_car");
+
+                // Desenha rodas com rotação a partir da velocidade
+                PushMatrix(model);
+                    //TODO : fazer roda rodar em torno do vetor ortogonal ao fowards do carro
+                    // model*Matrix_Rotate();
+                    glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                    glUniform1i(g_object_id_uniform, CAR_TYRES);
+                    DrawVirtualObject("roda_anterior_esquerda");
+                    DrawVirtualObject("roda_dianteira_esquerda");
+                    DrawVirtualObject("roda_anterior_direita");
+                    DrawVirtualObject("roda_dianteira_direita");
+                PopMatrix(model);
+                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                glUniform1i(g_object_id_uniform, CAR_BODY);
+                DrawVirtualObject("corpo");
+
+
+                
+
+            PopMatrix(model);
         // ________________________<<______________________<<<<<<
         TextRendering_ShowVelocity(window, carInfo.getVelocity(), carInfo.getIsSliding());
         TextRendering_ShowRotation(window, carInfo.getRotation());
@@ -1512,12 +1548,12 @@ void TextRendering_ShowProjection(GLFWwindow* window)
 }
 
 float timeSinceLastFrame(){
-    return ((float)glfwGetTime() - timeOfLastFrame) + verysmallnumber;
+    return ((float)glfwGetTime() - g_TimeOfLastFrame) + verysmallnumber;
 }
 
 void setEndFrameTime(){
 
-    timeOfLastFrame = (float)glfwGetTime();
+    g_TimeOfLastFrame = (float)glfwGetTime();
 
 }
 

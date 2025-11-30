@@ -12,6 +12,7 @@ in vec4 normal;
 
 // Posição do vértice atual no sistema de coordenadas local do modelo.
 in vec4 position_model;
+in vec4 normal_modelspace;
 
 // Coordenadas de textura obtidas do arquivo OBJ (se existirem!)
 in vec2 texcoords;
@@ -23,9 +24,12 @@ uniform mat4 projection;
 
 // Identificador que define qual objeto está sendo desenhado no momento
 #define PLANE 0
-#define CAR 1
-#define SKYBOX 2
-#define CAR_WINDOW 3
+#define SKYBOX 1
+#define CAR_BODY 2
+#define CAR_PLAQUES 3
+#define CAR_TYRES 4
+#define CAR_GLASSES 5
+
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -62,7 +66,7 @@ void main()
     // Normal do fragmento atual, interpolada pelo rasterizador a partir das
     // normais de cada vértice.
     vec4 n = normalize(normal);
-
+    
    // Vetor que define o sentido da fonte de luz em relação ao ponto atual.
     vec4 l = normalize(vec4(1.0,1.0,0.0,0.0));
 
@@ -82,37 +86,39 @@ void main()
     float U = 0.0;
     float V = 0.0;
 
-    if ( object_id == CAR )
+    if ( object_id == CAR_BODY )
     {   
         // Propriedades espectrais do carro
         light_model=LIGHT_MODEL_LAMBERT;
 
+        vec4 nm = normalize(normal_modelspace);
+
         // Projeção cúbica para o carro
-        if (abs(dot(n, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 1.0, 0.0, 0.0)))){
-            if (abs(dot(n, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 0.0, 1.0, 0.0)))){
+        if (abs(dot(nm, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(nm, vec4(0.0, 1.0, 0.0, 0.0)))){
+            if (abs(dot(nm, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(nm, vec4(0.0, 0.0, 1.0, 0.0)))){
                 // Projeção com plano YZ
-                U = position_model.y/bbox_max.y;
-                V = position_model.z/bbox_max.z;
+                U = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
+                V = (position_model.z - bbox_min.z) / (bbox_max.z - bbox_min.z);
             }else{
                 // Projeção com eixo XY
-                U = position_model.x/bbox_max.x;
-                V = position_model.z/bbox_max.z;
+                U = (position_model.x - bbox_min.x) / (bbox_max.x - bbox_min.x);
+                V = (position_model.y - bbox_min.y) / (bbox_max.y- bbox_min.y);
             }
         }else{
-            if (abs(dot(n, vec4(0.0, 1.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 0.0, 1.0, 0.0)))){
+            if (abs(dot(nm, vec4(0.0, 1.0, 0.0, 0.0))) > abs(dot(nm, vec4(0.0, 0.0, 1.0, 0.0)))){
                 // Projeção com eixo XZ
-                U = position_model.y/bbox_max.y;
-                V = position_model.x/bbox_max.x;
+                U = (position_model.x - bbox_min.x) / (bbox_max.x - bbox_min.x);
+                V = (position_model.z - bbox_min.z) / (bbox_max.z - bbox_min.z);
             }else{
                 // Projeção com eixo XY
-                U = position_model.x/bbox_max.x;
-                V = position_model.z/bbox_max.z;
+                U = (position_model.x - bbox_min.x) / (bbox_max.x - bbox_min.x);
+                V = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
             }
         }
         Kd = texture(TextureImage2, vec2(U,V)).rgb;
         Ka = vec3(0.0,0.0,0.0);
 
-    }else if (object_id == CAR_WINDOW){
+    }else if (object_id == CAR_GLASSES){
         light_model=LIGHT_MODEL_BLINNPHONG;
     }
     else if (object_id == PLANE)
