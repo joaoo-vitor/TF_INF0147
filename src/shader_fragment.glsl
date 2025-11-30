@@ -37,8 +37,8 @@ uniform vec4 bbox_min;
 uniform vec4 bbox_max;
 
 uniform sampler2D TextureImage0;
+uniform samplerCube SkyboxCube;
 uniform sampler2D TextureImage1;
-uniform sampler2D TextureImage2;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec4 color;
@@ -117,7 +117,7 @@ void main()
                 V = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
             }
         }
-        Kd = texture(TextureImage2, vec2(U,V)).rgb;
+        Kd = texture(TextureImage1, vec2(U,V)).rgb;
 
     }else if (object_id == CAR_GLASSES){
         light_model=LIGHT_MODEL_BLINNPHONG;
@@ -141,11 +141,7 @@ void main()
         vec3 bbox_center = ((bbox_min + bbox_max) / 2.0).xyz;
         vec3 p_linha = normalize(position_model.xyz - bbox_center);
 
-        //if (p_linha.y < 0) return;
-        // Convert direction into spherical coordinates
-        float U = atan(p_linha.z, p_linha.x) / (2.0 * M_PI) + 0.5;
-        float V = asin(p_linha.y);  // simple: height maps directly to y
-        Kd = texture(TextureImage1, vec2(U,V)).rgb;
+        Kd = texture(SkyboxCube, p_linha).rgb;
     }
     else // Objeto desconhecido = cor default, cinza escuro
     {

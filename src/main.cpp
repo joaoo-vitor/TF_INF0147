@@ -157,6 +157,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+GLuint LoadCubemap(std::vector<std::string> faces);
 
 // Funcoes para calculo do tempo de execução
 float timeSinceLastFrame();
@@ -337,9 +338,19 @@ int main(int argc, char* argv[])
     // ________________________>>_______________________>>>>>>  Load de texturas
         // Carregamos duas imagens para serem utilizadas como textura
         LoadTextureImage("../../data/track.jpg");      // TextureImage0
-        LoadTextureImage("../../data/Texturelabs_Sky_143M.jpg");  // TextureImage1
-        LoadTextureImage("../../data/car_texture.jpg");  // TextureImage2
+        LoadTextureImage("../../data/car_texture.jpg");  // TextureImage1
 
+        std::vector<std::string> faces
+        {
+            "../../data/skybox_px.png", 
+            "../../data/skybox_nx.png", 
+            "../../data/skybox_py.png", 
+            "../../data/skybox_ny.png", 
+            "../../data/skybox_pz.png",
+            "../../data/skybox_nz.png"  
+        };
+
+        GLuint cubemapTexture = LoadCubemap(faces);
 
     // ________________________<<_______________________<<<<<<
 
@@ -522,6 +533,10 @@ int main(int argc, char* argv[])
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, SKYBOX);
             DrawVirtualObject("the_sphere");
+            
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 3);
 
             model = Matrix_Scale(200.0f, 1.0f, 200.0f);
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
@@ -735,7 +750,6 @@ void LoadShadersFromFiles()
     glUseProgram(g_GpuProgramID);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage1"), 1);
-    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage2"), 2);
     glUseProgram(0);
 }
 
@@ -1811,6 +1825,50 @@ void updateFromKeyboard(){
     }
 }
 
+GLuint LoadCubemap(std::vector<std::string> faces)
+{
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(false); // VERY IMPORTANT for cubemaps
+
+    for (GLuint i = 0; i < faces.size(); i++)
+    {
+        unsigned char* data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 3);
+        if (data)
+        {
+            glTexImage2D(
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                0,
+                GL_RGB,
+                width,
+                height,
+                0,
+                GL_RGB,
+                GL_UNSIGNED_BYTE,
+                data
+            );
+            stbi_image_free(data);
+        }
+        else
+        {
+            std::cout << "Failed to load cubemap face: " << faces[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+    // Required to avoid seams
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
+}
 
 // _______________________>>_______________________>>>>>>  Sample section
 // __________"_____________<<_______________________<<<<<<
