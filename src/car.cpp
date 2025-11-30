@@ -11,7 +11,8 @@
 #define M_PI   3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
 
-#define MAX_VEL 50.0f // 3e-3 unidades por frame
+#define MAX_VEL 50.0f
+#define MIN_VEL 2.0f // Velocidade minima para quando estiver freiando, parar
 #define ACCELERATION 10.0f
 #define ACCELERATION_REVERSE 0.0001f
 #define BRAKE_ACCELERATION 0.005f
@@ -71,9 +72,7 @@ public:
     };
 
     bool getIsSliding(){
-
     	return isSliding;
-
     }
 
     // Valor de theta e phi calculados para esse modelo:
@@ -142,7 +141,6 @@ public:
     }
 
     void updateRotation(float elapsed_time){
-
         float forca_centrifuga = powf(turnAngle, 2) * mass * norm(velocity);
 
         if(forca_centrifuga > MAX_SIDE_GRIP || brake) isSliding = true;
@@ -151,8 +149,7 @@ public:
         if(isSliding)
             rotation.y += turnAngle * SLIDING_TURN_COEFICIENT * elapsed_time;
         else
-            //Se nao ãtiver derrapando,
-            rotation.y += turnAngle * NOT_SLIDING_TURN_COEFICIENT * norm(velocity) * elapsed_time;
+        rotation.y += turnAngle * NOT_SLIDING_TURN_COEFICIENT * norm(velocity) * elapsed_time;
 
 
         turnAngle *= 1 - TURNING_DECAY_RATIO * elapsed_time; // Decaimento do ângulo de curva
@@ -162,47 +159,39 @@ public:
     }
 
     void updateVelocity(float elapsed_time){
-
         // Calcula sideVelocity e forwardsVelocity
         // sideVelocity é o vetor da velocidade que aponta para a lateral do carro (esquerda ou direita)
         glm::vec4 side = normalize(crossproduct(forwardsVector, glm::vec4(0.0f, -1.0f, 0.0f, 0.0f)));
         glm::vec4 sideVelocity = side * dotproduct(velocity, side); // sideVelocity é o vetor da componente de velocidade perpendicular ao fowards
 
-	float tyreSpeed = dotproduct(forwardsVector, velocity);
+        float tyreSpeed = dotproduct(forwardsVector, velocity);
 
+        if(brake)
+            tyreSpeed = 0.0f;
+        else if(accelerate)
+            tyreSpeed = ACCELERATE_TYRE_SPEED_COEFICIENT;
+        if(isSliding){
+            velocity -= forwardsVector * tyreSpeed;
+            velocity -= elapsed_time * (norm(velocity) > mass * SLIDING_DRAG_COEFICIENT? normalize(velocity) * mass * SLIDING_DRAG_COEFICIENT : velocity);
+            velocity += forwardsVector * tyreSpeed;
 
+        }else{
+            glm::vec4 forwards = forwardsVector * (dotproduct(forwardsVector, velocity) + verysmallnumber);
+            forwards = normalize(forwards);
+            velocity = forwards * (norm(velocity) + (accelerate ? ACCELERATION : 0.0f) * elapsed_time);
 
-	if(brake)
-		tyreSpeed = 0.0f;
-
-	else if(accelerate)
-		tyreSpeed = ACCELERATE_TYRE_SPEED_COEFICIENT;
-
-	if(isSliding){
-
-		velocity -= forwardsVector * tyreSpeed;
-
-		velocity -= elapsed_time * (norm(velocity) > mass * SLIDING_DRAG_COEFICIENT? normalize(velocity) * mass * SLIDING_DRAG_COEFICIENT : velocity);
-
-		velocity += forwardsVector * tyreSpeed;
-
-	}else{
-
-		glm::vec4 forwards = forwardsVector * (dotproduct(forwardsVector, velocity) + verysmallnumber);
-
-		forwards = normalize(forwards);
-
-		velocity = forwards * (norm(velocity) + (accelerate ? ACCELERATION : 0.0f) * elapsed_time);
-
-	}
-	if(norm(velocity)>=MAX_VEL){
-	
-        	velocity=MAX_VEL * normalize(velocity);
-        	
         }
-	
-	if(!accelerate && !brake) velocity *= 1 - VELOCITY_DECAY_RATIO * elapsed_time;
-	
+
+        if(norm(velocity)>=MAX_VEL){
+            velocity=MAX_VEL * normalize(velocity);
+        }
+
+        if((norm(velocity)<=MIN_VEL) && (brake)){
+            velocity = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        }
+        
+        if(!accelerate && !brake) velocity *= 1 - VELOCITY_DECAY_RATIO * elapsed_time;
+        
     }
 
     void updateForwardsVector(){
@@ -214,12 +203,11 @@ public:
     }
 
     void update(float elapsed_time){
-
-    //    +    tecla para curva é pressionada
-    //    |__..->+    turnAngle é incrementado
-    //           |__..->+    rotation é atualizada com o ângulo de rotação
-    //                  |__..->+ vetor fowards é atualizado
-    //                         |__..->+ velocity é calculado baseado em fowards e o velocity anterior (o que pode gerar um angulo)
+        //    +    tecla para curva é pressionada
+        //    |__..->+    turnAngle é incrementado
+        //           |__..->+    rotation é atualizada com o ângulo de rotação
+        //                  |__..->+ vetor fowards é atualizado
+        //                         |__..->+ velocity é calculado baseado em fowards e o velocity anterior (o que pode gerar um angulo)
 
     	updatePosition(elapsed_time);
     	updateRotation(elapsed_time);
