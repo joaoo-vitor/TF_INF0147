@@ -338,7 +338,7 @@ int main(int argc, char* argv[])
         // Carregamos duas imagens para serem utilizadas como textura
         LoadTextureImage("../../data/track.jpg");      // TextureImage0
         LoadTextureImage("../../data/Texturelabs_Sky_143M.jpg");  // TextureImage1
-        LoadTextureImage("../../data/grass_texture.jpeg");  // TextureImage2
+        LoadTextureImage("../../data/car_texture.jpg");  // TextureImage2
 
 
     // ________________________<<_______________________<<<<<<
@@ -553,9 +553,11 @@ int main(int argc, char* argv[])
                 glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
                 glUniform1i(g_object_id_uniform, CAR_BODY);
                 DrawVirtualObject("corpo");
-
-
-                
+                glUniform1i(g_object_id_uniform, CAR_GLASSES);
+                DrawVirtualObject("vidros");
+                glUniform1i(g_object_id_uniform, CAR_PLAQUES);
+                DrawVirtualObject("placas");
+                DrawVirtualObject("logo");
 
             PopMatrix(model);
         // ________________________<<______________________<<<<<<

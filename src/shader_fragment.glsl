@@ -77,9 +77,11 @@ void main()
     vec4 r = -l + 2*n*(dot(n, l)); // PREENCHA AQUI o vetor de reflexão especular ideal
 
     // Parâmetros que definem as propriedades espectrais da superfície
-    vec3 Kd; // Refletância difusa
-    vec3 Ks; // Refletância especular
-    vec3 Ka; // Refletância ambiente
+    vec3 Kd = vec3(0.0,0.0,0.0);; // Refletância difusa (sempre utilizada)
+    vec3 Ks; // Refletância especular (nem sempre calculada)
+    vec3 Ka = vec3(0.1,0.1,0.1); // Refletância ambiente 
+    //(minima para não ter lugares em preto, evitando baixo fotorealismo)
+
     float q; // Expoente especular para o modelo de iluminação de Phong
 
     // Coordenadas de textura U e V
@@ -116,10 +118,12 @@ void main()
             }
         }
         Kd = texture(TextureImage2, vec2(U,V)).rgb;
-        Ka = vec3(0.0,0.0,0.0);
 
     }else if (object_id == CAR_GLASSES){
         light_model=LIGHT_MODEL_BLINNPHONG;
+        Kd= vec3(0.7, 0.7, 0.7);
+        Ks = vec3(0.9, 0.9, 0.1);
+        q=90;
     }
     else if (object_id == PLANE)
     {
@@ -127,14 +131,10 @@ void main()
         light_model=LIGHT_MODEL_LAMBERT;
 
         // Projeção planar
-        
-
         U = position_world.x * 0.002f;
         V = position_world.z * 0.002f;
         Kd = texture(TextureImage0, vec2(U,V)).rgb;
         Ks = vec3(0.0, 0.0, 0.0);
-        Ka = vec3(0.0,0.0,0.0);
-        q = 20.0;
     } else if(object_id == SKYBOX){
         light_model=LIGHT_MODEL_NO_MODEL;
 
@@ -145,29 +145,25 @@ void main()
         // Convert direction into spherical coordinates
         float U = atan(p_linha.z, p_linha.x) / (2.0 * M_PI) + 0.5;
         float V = asin(p_linha.y);  // simple: height maps directly to y
-
         Kd = texture(TextureImage1, vec2(U,V)).rgb;
-        Ks = vec3(0.0, 0.0, 0.0);
-        Ka = vec3(0.0,0.0,0.0);
-        q = 20.0;
     }
-    else // Objeto desconhecido = preto
+    else // Objeto desconhecido = cor default, cinza escuro
     {
         light_model=LIGHT_MODEL_NO_MODEL;
-        Kd = vec3(0.0,0.0,0.0);
-        Ks = vec3(0.0,0.0,0.0);
-        Ka = vec3(0.0,0.0,0.0);
-        q = 1.0;
+        Kd = vec3(0.05,0.05,0.05);
     }
 
     // Define o modelo de iluminação a partir do tipo
     if(light_model == LIGHT_MODEL_BLINNPHONG){
         // TODO - modelo blin phong
         vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
-        vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
+        vec3 Ia = vec3(0.13,0.13,0.13); // O espectro da luz ambiente
         vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // o termo difuso de Lambert
         vec3 ambient_term = Ka * Ia; // O termo ambiente
-        vec3 phong_specular_term  = Ks * I * pow(max(dot(r, v), 0), q); // o termo especular de Phong
+
+        // Blinn-Phong uses half vector
+        vec4 h = normalize(l+v);
+        vec3 phong_specular_term  = Ks * I * pow(max(dot(n, h), 0.0), q); // o termo especular de Phong
         color.rgb = lambert_diffuse_term + ambient_term + phong_specular_term;
 
     }else if (light_model == LIGHT_MODEL_LAMBERT) {
