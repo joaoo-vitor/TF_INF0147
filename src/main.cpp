@@ -51,6 +51,9 @@
 #include "car.cpp"
 #include "keyboard.cpp"
 
+// Defines
+#define FREE_CAM_VEL 0.005f
+
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
 struct ObjModel
@@ -195,11 +198,6 @@ std::stack<glm::mat4>  g_MatrixStack;
 // Razão de proporção da janela (largura/altura). Veja função FramebufferSizeCallback().
 float g_ScreenRatio = 1.0f;
 
-// Ângulos de Euler que controlam a rotação de um dos cubos da cena virtual
-float g_AngleX = 0.0f;
-float g_AngleY = 0.0f;
-float g_AngleZ = 0.0f;
-
 // "g_LeftMouseButtonPressed = true" se o usuário está com o botão esquerdo do mouse
 // pressionado no momento atual. Veja função MouseButtonCallback().
 bool g_LeftMouseButtonPressed = false;
@@ -212,21 +210,22 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // renderização.
 float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 12.0f; // Distância da câmera para a origem
-
-// Variáveis que controlam rotação do antebraço
-float g_ForearmAngleZ = 0.0f;
-float g_ForearmAngleX = 0.0f;
-
-// Variáveis que controlam translação do torso
-float g_TorsoPositionX = 0.0f;
-float g_TorsoPositionY = 0.0f;
+float g_CameraDistance = 12.0f; // Distância da câmera para o ponto look-at
 
 // Variável que controla o tipo de projeção utilizada: perspectiva ou ortográfica.
 bool g_UsePerspectiveProjection = true;
 
 // Variável que controla se o texto informativo será mostrado na tela.
 bool g_ShowInfoText = true;
+
+// Variável para fazer toggle entre cameras
+bool g_UseFreeCamera = false;
+
+// Variável para correr mais rapido na câmera livre
+bool g_FreeCameraDoubleSpeed=false;
+
+// Variável para fazer ações apenas 1x quando trocar pra free camera
+bool g_JustToggledFreeCamera = false;
 
 // Variável para dizer o tipo de camera sendo utilizada
 enum cameraType{
@@ -236,8 +235,12 @@ enum cameraType{
     slidingLookAt
 };
 
-enum cameraType g_lastType = lockedLookAt;
-enum cameraType g_cameraType = lockedLookAt;
+enum cameraType g_CameraType = freeLookAt;
+
+glm::vec4 g_CameraPosition; 
+glm::vec4 g_CameraViewVector; // Vetor "view", sentido para onde a câmera está virada
+glm::vec4 g_CameraUpVector = normalize(glm::vec4(0.0f,1.0f,0.0f,0.0f)); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+
 
 // Variáveis que definem um programa de GPU (shaders). Veja função LoadShadersFromFiles().
 GLuint g_GpuProgramID = 0;
@@ -335,8 +338,10 @@ int main(int argc, char* argv[])
     // ________________________>>_______________________>>>>>>  Load de texturas
         // Carregamos duas imagens para serem utilizadas como textura
         LoadTextureImage("../../data/track.jpg");      // TextureImage0
-        LoadTextureImage("../../data/sky.jpg");  // TextureImage1
-        //LoadTextureImage("../../data/sky.jpg");  // TextureImage2
+        LoadTextureImage("../../data/Texturelabs_Sky_143M.jpg");  // TextureImage1
+        LoadTextureImage("../../data/grass_texture.jpeg");  // TextureImage2
+
+
     // ________________________<<_______________________<<<<<<
 
 
@@ -395,53 +400,61 @@ int main(int argc, char* argv[])
         // os shaders de vértice e fragmentos).
         glUseProgram(g_GpuProgramID);
 
-
-        if (g_LeftMouseButtonPressed){
-            g_cameraType = freeLookAt;}
-        else if(carInfo.getIsSliding()){
-            g_cameraType = slidingLookAt;}
-        else{
-            g_cameraType = lockedLookAt;}
-
         // _______________________>>_____________________>>>>  Camera settings
 
-            // Computamos a posição da câmera utilizando coordenadas esféricas.  As
-            // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
-            // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
-            // e ScrollCallback().
+            if (g_UseFreeCamera){
+                g_CameraType = freeCamera;
+                if(g_JustToggledFreeCamera){
+                    g_JustToggledFreeCamera=false;
+                    // Translada 2 unidades no vetor da posição da câmera
+                    g_CameraPosition += glm::vec4(0.0f, 3.0f, 0.0f, 0.0f);
+                    g_CameraViewVector = normalize(carInfo.getPosition() - g_CameraPosition);
 
-            // Todo: Ajeitar
-            switch (g_cameraType){
+                    // Calcula valores iniciais de phi e theta para câmera livre
+                    float vx = g_CameraViewVector.x;
+                    float vy = g_CameraViewVector.y;
+                    float vz = g_CameraViewVector.z;
+
+                    g_CameraPhi = asin(vy / norm(g_CameraViewVector));
+                    g_CameraTheta = atan2(vx, vz);
+                }
+            }else{
+                // If if camera is on car, change between types
+                if (g_LeftMouseButtonPressed) g_CameraType = freeLookAt;
+                else if(carInfo.getIsSliding()) g_CameraType = slidingLookAt;
+                else g_CameraType = lockedLookAt;
+            }
+
+            // Faz o calculo dos vetores da cãmera
+            float r,x,y,z;
+            glm::vec4 camera_lookat_l;
+            switch (g_CameraType){
                 case freeLookAt:
-
-                    break;
                 case lockedLookAt:
-                    g_CameraPhi = carInfo.getCameraPhi();
-                    g_CameraTheta = carInfo.getCameraTheta();
-                    break;
                 case slidingLookAt:
                     g_CameraPhi = carInfo.getCameraPhi();
                     g_CameraTheta = carInfo.getCameraTheta();
+                    r = g_CameraDistance;
+                    y = r*sin(g_CameraPhi);
+                    z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
+                    x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+                    g_CameraPosition  = carInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
+                    camera_lookat_l    = carInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+                    g_CameraViewVector= normalize(camera_lookat_l - g_CameraPosition); // Vetor "view", sentido para onde a câmera está virada
+
+                    break;
+                case freeCamera:
+                    y = r*sin(g_CameraPhi);
+                    z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
+                    x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+                    g_CameraViewVector= normalize(glm::vec4(x,y,z,0.0f)); // Vetor "view", sentido para onde a câmera está virada
                     break;
                 default:;
-
             }
-
-            float r = g_CameraDistance;
-            float y = r*sin(g_CameraPhi);
-            float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
-            float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
-
-            // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
-            // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-            glm::vec4 camera_position_c  = carInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
-            glm::vec4 camera_lookat_l    = carInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
-            glm::vec4 camera_view_vector = normalize(camera_lookat_l - camera_position_c); // Vetor "view", sentido para onde a câmera está virada
-            glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
 
             // Computamos a matriz "View" utilizando os parâmetros da câmera para
             // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-            glm::mat4 view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
+            glm::mat4 view = Matrix_Camera_View(g_CameraPosition, g_CameraViewVector, g_CameraUpVector);
 
             // Agora computamos a matriz de Projeção.
             glm::mat4 projection;
@@ -489,13 +502,12 @@ int main(int argc, char* argv[])
 
         // _______________________>>_____________________>>>>  desenho dos objetos
 
-        // skybox is behind everything
+        // Skybox primeiro, pois fica atrás de tudo
          model =  carInfo.getTranslationMatrix()
-             * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // huge sphere
+             * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // esfera gigante
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(g_object_id_uniform, SKYBOX);
         DrawVirtualObject("the_sphere");
-
 
         model = Matrix_Scale(200.0f, 1.0f, 200.0f);
         glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
@@ -511,9 +523,6 @@ int main(int argc, char* argv[])
 
 
         // ________________________<<______________________<<<<<<
-
-        // Imprimimos na tela os ângulos de Euler que controlam a rotação do
-        // terceiro cubo.
         TextRendering_ShowVelocity(window, carInfo.getVelocity(), carInfo.getIsSliding());
         TextRendering_ShowRotation(window, carInfo.getRotation());
 
@@ -541,12 +550,11 @@ int main(int argc, char* argv[])
         // Atualiza as variaveis de movimentaçao com base no teclado.
         updateFromKeyboard();
 
-        // Atuliza valores pro carro
-        carInfo.update(g_elapsed_time = timeSinceLastFrame());
+        // Atuliza valores pro carro (para o tempo passado)
+        carInfo.update(timeSinceLastFrame());
 
         // Atualiza o tempo do ultimo frame
         setEndFrameTime();
-
 
     }
 
@@ -1219,21 +1227,33 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
+        float phimin, phimax;
 
-        // Atualizamos parâmetros da câmera com os deslocamentos
-        g_CameraTheta -= 0.01f*dx;
-        g_CameraPhi   += 0.01f*dy;
+        // Define os limites do angulo da camera dependendo do tipoe de camera
+        // (camera livre tem o theta )
+        if(g_CameraType==freeCamera){
+            // Atualizamos parâmetros da câmera com os deslocamentos
+            g_CameraTheta -= 0.01f*dx;
+            g_CameraPhi   -= 0.01f*dy;
 
-        // phimax is when the camera is (almost) looking straight down
-        float phimax = 3.141592f/2-0.01;
-        float phimin = 0.01; // minimo para não olhar por baixo do plano
+            phimax = M_PI/2-0.01; //
+            phimin = -M_PI/2+0.01;          
+        }else{
+            // Atualizamos parâmetros da câmera com os deslocamentos
+            g_CameraTheta -= 0.01f*dx;
+            g_CameraPhi   += 0.01f*dy;
+
+            // phimax is when the camera is (almost) looking straight down
+            phimax = 3.141592f/2-0.01;
+            phimin = 0.01; // minimo para não olhar por baixo do plano    
+        }
 
         if (g_CameraPhi > phimax)
             g_CameraPhi = phimax;
 
         if (g_CameraPhi < phimin)
             g_CameraPhi = phimin;
-
+        
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1245,11 +1265,6 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-
-        // Atualizamos parâmetros da antebraço com os deslocamentos
-        g_ForearmAngleZ -= 0.01f*dx;
-        g_ForearmAngleX += 0.01f*dy;
-
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1261,11 +1276,6 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-
-        // Atualizamos parâmetros da antebraço com os deslocamentos
-        g_TorsoPositionX += 0.01f*dx;
-        g_TorsoPositionY -= 0.01f*dy;
-
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1305,19 +1315,25 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
 
-    // O código abaixo implementa a seguinte lógica:
-    //   Se apertar tecla X       então g_AngleX += delta;
-    //   Se apertar tecla shift+X então g_AngleX -= delta;
-    //   Se apertar tecla Y       então g_AngleY += delta;
-    //   Se apertar tecla shift+Y então g_AngleY -= delta;
-    //   Se apertar tecla Z       então g_AngleZ += delta;
-    //   Se apertar tecla shift+Z então g_AngleZ -= delta;
-
-    float delta = 3.141592 / 16; // 22.5 graus, em radianos.
-
     if ((key == GLFW_KEY_W || key == GLFW_KEY_UP) && action == GLFW_PRESS)
     {
         keyInfo.forwards_held = true;
+    }
+
+    // Se o usuário apertar a tecla C, fazemos um toggle da camera livre
+    if (key == GLFW_KEY_C && action == GLFW_PRESS)
+    {
+        g_UseFreeCamera =  !g_UseFreeCamera;
+        g_JustToggledFreeCamera=true;
+    }
+    // Se o usuário apertar a tecla CTRL, aumenta a velocidade da camera livre
+    if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
+    {
+        g_FreeCameraDoubleSpeed=true;
+    }
+    if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_RELEASE)
+    {
+        g_FreeCameraDoubleSpeed=false;
     }
 
     if ((key == GLFW_KEY_A || key == GLFW_KEY_LEFT) && action == GLFW_PRESS)
@@ -1348,9 +1364,13 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     {
         keyInfo.right_held = false;
     }
-    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN || key == GLFW_KEY_SPACE) && action == GLFW_RELEASE)
+    if (( key == GLFW_KEY_SPACE) && action == GLFW_RELEASE)
     {
         keyInfo.brake_held = false;
+    }
+    if ((key == GLFW_KEY_S || key == GLFW_KEY_DOWN) && action == GLFW_RELEASE)
+    {
+        keyInfo.reverse_held = false;
     }
 
     // Se o usuário apertar a tecla P, utilizamos projeção perspectiva.
@@ -1365,7 +1385,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         g_UsePerspectiveProjection = false;
     }
 
-    // Se o usuário apertar a tecla H, fazemos um "toggle" do texto informativo mostrado na tela.
+    // Se o usuário apertar a tecla H, fazemos um "toggle" do texto de debugging mostrado na tela.
     if (key == GLFW_KEY_H && action == GLFW_PRESS)
     {
         g_ShowInfoText = !g_ShowInfoText;
@@ -1491,13 +1511,10 @@ void TextRendering_ShowProjection(GLFWwindow* window)
         TextRendering_PrintString(window, "Orthographic", 1.0f-13*charwidth, -1.0f+2*lineheight/10, 1.0f);
 }
 
-// Escrevemos na tela o número de quadros renderizados por segundo (frames per
-// second).
 float timeSinceLastFrame(){
-
     return ((float)glfwGetTime() - timeOfLastFrame) + verysmallnumber;
-
 }
+
 void setEndFrameTime(){
 
     timeOfLastFrame = (float)glfwGetTime();
@@ -1712,24 +1729,48 @@ void PrintObjModelInfo(ObjModel* model)
 
 // set makeprg=cd\ ..\ &&\ make\ run\ >/dev/null
 // vim: set spell spelllang=pt_br :
-
 void updateFromKeyboard(){
-    if(keyInfo.forwards_held) carInfo.setAccelerate(true);
-    else carInfo.setAccelerate(false);
-
-    if(keyInfo.left_held) carInfo.turnLeft(g_elapsed_time);
-
-    if(keyInfo.right_held) carInfo.turnRight(g_elapsed_time);
-
-    if(keyInfo.brake_held) carInfo.setBrake(true);
-    else carInfo.setBrake(false);
-
-    if(keyInfo.reverse_held){
-        carInfo.setReverse(true);
-        carInfo.setAccelerate(true);
+    if(g_CameraType==freeCamera){
+        float cameraVel=FREE_CAM_VEL;
+        if(g_FreeCameraDoubleSpeed) cameraVel*=2;
+        // Controls camera if free camera
+        if(keyInfo.forwards_held){
+            g_CameraPosition+=cameraVel*g_CameraViewVector;
+        }
+        if(keyInfo.left_held){
+            glm::vec4 u = crossproduct(g_CameraUpVector, -g_CameraViewVector);
+            u/=norm(u);
+            g_CameraPosition-=cameraVel*u;
+        }
+        if(keyInfo.right_held){
+            glm::vec4 u = crossproduct(g_CameraUpVector, -g_CameraViewVector);
+            u/=norm(u);
+            g_CameraPosition+=cameraVel*u;
+        }
+        if(keyInfo.reverse_held){
+            g_CameraPosition-=cameraVel*g_CameraViewVector;            
+        }
     }else{
-        carInfo.setReverse(false);
-    };
+        // Controls car if camera is lookat
+        if(keyInfo.forwards_held) carInfo.setAccelerate(true);
+        else carInfo.setAccelerate(false);
+
+        float elapsed_time = timeSinceLastFrame();
+
+        if(keyInfo.left_held) carInfo.turnLeft(elapsed_time);
+
+        if(keyInfo.right_held) carInfo.turnRight(elapsed_time);
+
+        if(keyInfo.brake_held) carInfo.setBrake(true);
+        else carInfo.setBrake(false);
+
+        if(keyInfo.reverse_held){
+            carInfo.setReverse(true);
+            carInfo.setAccelerate(true);
+        }else{
+            carInfo.setReverse(false);
+        };
+    }
 }
 
 

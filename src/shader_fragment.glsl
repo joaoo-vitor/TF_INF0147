@@ -25,6 +25,7 @@ uniform mat4 projection;
 #define PLANE 0
 #define CAR 1
 #define SKYBOX 2
+#define CAR_WINDOW 3
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -82,20 +83,46 @@ void main()
     float V = 0.0;
 
     if ( object_id == CAR )
-    {
-        light_model=LIGHT_MODEL_BLINNPHONG;
-
+    {   
         // Propriedades espectrais do carro
-        Kd = vec3(0.05, 0.05, 0.05);
-        Ks = vec3(0.08, 0.08, 0.08);
-        Ka = Kd/2;
-        q = 50;
-    }
-    else if ( object_id == PLANE )
-    {
         light_model=LIGHT_MODEL_LAMBERT;
 
-        // Propriedades espectrais do plano
+        // Projeção cúbica para o carro
+        if (abs(dot(n, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 1.0, 0.0, 0.0)))){
+            if (abs(dot(n, vec4(1.0, 0.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 0.0, 1.0, 0.0)))){
+                // Projeção com plano YZ
+                U = position_model.y/bbox_max.y;
+                V = position_model.z/bbox_max.z;
+            }else{
+                // Projeção com eixo XY
+                U = position_model.x/bbox_max.x;
+                V = position_model.z/bbox_max.z;
+            }
+        }else{
+            if (abs(dot(n, vec4(0.0, 1.0, 0.0, 0.0))) > abs(dot(n, vec4(0.0, 0.0, 1.0, 0.0)))){
+                // Projeção com eixo XZ
+                U = position_model.y/bbox_max.y;
+                V = position_model.x/bbox_max.x;
+            }else{
+                // Projeção com eixo XY
+                U = position_model.x/bbox_max.x;
+                V = position_model.z/bbox_max.z;
+            }
+        }
+        Kd = texture(TextureImage2, vec2(U,V)).rgb;
+        Ka = vec3(0.0,0.0,0.0);
+
+    }else if (object_id == CAR_WINDOW){
+        light_model=LIGHT_MODEL_BLINNPHONG;
+    }
+    else if (object_id == PLANE)
+    {
+        // Propriedades espectrais do plano 
+        light_model=LIGHT_MODEL_LAMBERT;
+
+        // Projeção planar
+        
+
         U = position_world.x * 0.002f;
         V = position_world.z * 0.002f;
         Kd = texture(TextureImage0, vec2(U,V)).rgb;
@@ -130,13 +157,13 @@ void main()
     // Define o modelo de iluminação a partir do tipo
     if(light_model == LIGHT_MODEL_BLINNPHONG){
         // TODO - modelo blin phong
-
         vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
         vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
         vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // o termo difuso de Lambert
         vec3 ambient_term = Ka * Ia; // O termo ambiente
         vec3 phong_specular_term  = Ks * I * pow(max(dot(r, v), 0), q); // o termo especular de Phong
         color.rgb = lambert_diffuse_term + ambient_term + phong_specular_term;
+
     }else if (light_model == LIGHT_MODEL_LAMBERT) {
         vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
         vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
