@@ -52,7 +52,8 @@
 #include "keyboard.cpp"
 
 // Defines
-#define FREE_CAM_VEL 0.005f
+#define FREE_CAM_VEL 2.0f
+#define CAM_TURN_VEL M_PI_2
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -160,7 +161,7 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 GLuint LoadCubemap(std::vector<std::string> faces);
 
 // Funcoes para calculo do tempo de execução
-float timeSinceLastFrame();
+float getTimeSinceLastFrame();
 void setEndFrameTime();
 
 // Funcao de atualizacao de estado por dados do teclado
@@ -604,11 +605,10 @@ int main(int argc, char* argv[])
         updateFromKeyboard();
 
         // Atuliza valores pro carro (para o tempo passado)
-        carInfo.update(timeSinceLastFrame());
+        carInfo.update(getTimeSinceLastFrame());
 
         // Atualiza o tempo do ultimo frame
         setEndFrameTime();
-
     }
 
     // Finalizamos o uso dos recursos do sistema operacional
@@ -1280,20 +1280,20 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
         float phimin, phimax;
-
+        float elapsedTime = getTimeSinceLastFrame();
         // Define os limites do angulo da camera dependendo do tipoe de camera
         // (camera livre tem o theta )
         if(g_CameraType==freeCamera){
             // Atualizamos parâmetros da câmera com os deslocamentos
-            g_CameraTheta -= 0.01f*dx;
-            g_CameraPhi   -= 0.01f*dy;
+            g_CameraTheta -= CAM_TURN_VEL*dx*elapsedTime;
+            g_CameraPhi   -= CAM_TURN_VEL*dy*elapsedTime;
 
             phimax = M_PI/2-0.01; //
             phimin = -M_PI/2+0.01;          
         }else{
             // Atualizamos parâmetros da câmera com os deslocamentos
-            g_CameraTheta -= 0.01f*dx;
-            g_CameraPhi   += 0.01f*dy;
+            g_CameraTheta -= CAM_TURN_VEL*dx*elapsedTime;
+            g_CameraPhi   += CAM_TURN_VEL*dy*elapsedTime;
 
             // phimax is when the camera is (almost) looking straight down
             phimax = 3.141592f/2-0.01;
@@ -1563,7 +1563,7 @@ void TextRendering_ShowProjection(GLFWwindow* window)
         TextRendering_PrintString(window, "Orthographic", 1.0f-13*charwidth, -1.0f+2*lineheight/10, 1.0f);
 }
 
-float timeSinceLastFrame(){
+float getTimeSinceLastFrame(){
     return ((float)glfwGetTime() - g_TimeOfLastFrame) + verysmallnumber;
 }
 
@@ -1783,31 +1783,34 @@ void PrintObjModelInfo(ObjModel* model)
 // vim: set spell spelllang=pt_br :
 void updateFromKeyboard(){
     if(g_CameraType==freeCamera){
+        // Controls camera if free camera
         float cameraVel=FREE_CAM_VEL;
         if(g_FreeCameraDoubleSpeed) cameraVel*=2;
-        // Controls camera if free camera
+
+        float elapsedTime = getTimeSinceLastFrame();
+        
         if(keyInfo.forwards_held){
-            g_CameraPosition+=cameraVel*g_CameraViewVector;
+            g_CameraPosition+=cameraVel*elapsedTime*g_CameraViewVector;
         }
         if(keyInfo.left_held){
             glm::vec4 u = crossproduct(g_CameraUpVector, -g_CameraViewVector);
             u/=norm(u);
-            g_CameraPosition-=cameraVel*u;
+            g_CameraPosition-=cameraVel*elapsedTime*u;
         }
         if(keyInfo.right_held){
             glm::vec4 u = crossproduct(g_CameraUpVector, -g_CameraViewVector);
             u/=norm(u);
-            g_CameraPosition+=cameraVel*u;
+            g_CameraPosition+=cameraVel*elapsedTime*u;
         }
         if(keyInfo.reverse_held){
-            g_CameraPosition-=cameraVel*g_CameraViewVector;            
+            g_CameraPosition-=cameraVel*elapsedTime*g_CameraViewVector;            
         }
     }else{
         // Controls car if camera is lookat
         if(keyInfo.forwards_held) carInfo.setAccelerate(true);
         else carInfo.setAccelerate(false);
 
-        float elapsed_time = timeSinceLastFrame();
+        float elapsed_time = getTimeSinceLastFrame();
 
         if(keyInfo.left_held) carInfo.turnLeft(elapsed_time);
 
@@ -1825,6 +1828,8 @@ void updateFromKeyboard(){
     }
 }
 
+
+// Código pronto para fazer load do cubemap, usado para projeção da esfera
 GLuint LoadCubemap(std::vector<std::string> faces)
 {
     GLuint textureID;
