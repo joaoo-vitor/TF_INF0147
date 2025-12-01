@@ -498,11 +498,11 @@ int main(int argc, char* argv[])
             float r,x,y,z;
             glm::vec4 camera_lookat_l;
             switch (g_CameraType){
-                case freeLookAt:
                 case lockedLookAt:
                 case slidingLookAt:
                     g_CameraPhi = carInfo.getCameraPhi();
                     g_CameraTheta = carInfo.getCameraTheta();
+                case freeLookAt:
                     r = g_CameraDistance;
                     y = r*sin(g_CameraPhi);
                     z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
@@ -510,7 +510,6 @@ int main(int argc, char* argv[])
                     g_CameraPosition  = carInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
                     camera_lookat_l    = carInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
                     g_CameraViewVector= normalize(camera_lookat_l - g_CameraPosition); // Vetor "view", sentido para onde a câmera está virada
-
                     break;
                 case freeCamera:
                     y = r*sin(g_CameraPhi);
