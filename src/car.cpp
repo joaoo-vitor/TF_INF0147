@@ -14,7 +14,7 @@
 #define MAX_VEL 50.0f
 #define MIN_VEL 2.0f // Velocidade minima para quando estiver freiando, parar
 #define ACCELERATION 10.0f
-#define ACCELERATION_REVERSE 0.0001f
+#define ACCELERATION_REVERSE 5.0f
 #define BRAKE_ACCELERATION 0.005f
 
 #define VELOCITY_DECAY_RATIO 0.8f
@@ -145,13 +145,13 @@ public:
     void updateRotation(float elapsed_time){
         float forca_centrifuga = powf(turnAngle, 2) * mass * norm(velocity);
 
-        if(forca_centrifuga > MAX_SIDE_GRIP || brake) isSliding = true;
-        else if(dotproduct(velocity, forwardsVector) / (norm(velocity) + 0.000001f) > MIN_CORRELATION_GRIP) isSliding = false;
+        if(forca_centrifuga > MAX_SIDE_GRIP && norm(velocity) > MIN_VEL) isSliding = true;
+        else if(dotproduct(velocity, forwardsVector) / (norm(velocity) + 0.000001f) > MIN_CORRELATION_GRIP || norm(velocity) <= MIN_VEL) isSliding = false;
 
         if(isSliding)
             rotation.y += turnAngle * SLIDING_TURN_COEFICIENT * elapsed_time;
         else
-        rotation.y += turnAngle * NOT_SLIDING_TURN_COEFICIENT * norm(velocity) * elapsed_time;
+        rotation.y += turnAngle * NOT_SLIDING_TURN_COEFICIENT * dotproduct(velocity, forwardsVector) * elapsed_time;
 
 
         turnAngle *= 1 - TURNING_DECAY_RATIO * elapsed_time; // Decaimento do ângulo de curva
@@ -178,9 +178,15 @@ public:
             velocity += forwardsVector * tyreSpeed;
 
         }else{
-            glm::vec4 forwards = forwardsVector * (dotproduct(forwardsVector, velocity) + verysmallnumber);
+        
+            float cosine = dotproduct(forwardsVector, velocity) + verysmallnumber;
+            glm::vec4 forwards = forwardsVector * cosine;
             forwards = normalize(forwards);
-            velocity = forwards * (norm(velocity) + (accelerate ? ACCELERATION : 0.0f) * elapsed_time);
+            
+            float sign = cosine >= 0.0f ? 1.0f : -1.0f;
+
+            velocity = forwards * (norm(velocity) + ((accelerate ? ACCELERATION : 0.0f) - (brake ? ACCELERATION_REVERSE : 0.0f)) * sign * elapsed_time);
+
 
         }
 
@@ -188,12 +194,15 @@ public:
             velocity=MAX_VEL * normalize(velocity);
         }
 
-        if((norm(velocity)<=MIN_VEL) && (brake)){
+        if((norm(velocity)<=ZERO_VELOCITY_THRESHOLD) && (brake)){
             velocity = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         }
         
-        if(!accelerate && !brake) velocity *= 1 - VELOCITY_DECAY_RATIO * elapsed_time;
+        if(!accelerate){
         
+            velocity *= 1 - VELOCITY_DECAY_RATIO * elapsed_time;
+        
+        }
     }
 
     void updateForwardsVector(){
