@@ -52,7 +52,7 @@
 #include "keyboard.cpp"
 
 // Defines
-#define FREE_CAM_VEL 2.0f
+#define FREE_CAM_VEL 20.0f
 #define CAM_TURN_VEL M_PI_2
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
@@ -114,6 +114,14 @@ struct ObjModel
     }
 };
 
+struct SimpleModel
+{
+    std::vector<glm::vec3> coordinates; 
+    std::vector<glm::vec3> normals;
+    std::vector<GLuint>    indices;
+};
+
+
 // Declaração de funções utilizadas para pilha de matrizes de modelagem.
 void PushMatrix(glm::mat4 M);
 void PopMatrix(glm::mat4& M);
@@ -160,7 +168,10 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 GLuint LoadCubemap(std::vector<std::string> faces);
-ObjModel CreatePlaneObjModel(const std::string& object_name, float width, float length);
+SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 startingPoint);
+void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model);
+SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment);
+
 
 // Funcoes para calculo do tempo de execução
 float getTimeSinceLastFrame();
@@ -339,10 +350,12 @@ int main(int argc, char* argv[])
     LoadShadersFromFiles();
 
     // ________________________>>_______________________>>>>>>  Load de texturas
+        
         // Carregamos duas imagens para serem utilizadas como textura
-        LoadTextureImage("../../data/track.jpg");      // TextureImage0
-        LoadTextureImage("../../data/car_texture.jpg");  // TextureImage1
-
+        LoadTextureImage("../../data/car_texture.jpg");  // TextureImage0
+        LoadTextureImage("../../data/asphalt.jpg");  // TextureImage1
+        LoadTextureImage("../../data/aerial_grass_rock_diff_1k.png");  // TextureImage2
+        LoadTextureImage("../../data/damaged_plaster_diff_1k.png");  // TextureImage3
         std::vector<std::string> faces
         {
             "../../data/skybox_px.png", 
@@ -368,8 +381,35 @@ int main(int argc, char* argv[])
         ComputeNormals(&planeModel);
         BuildTrianglesAndAddToVirtualScene(&planeModel);
 
-        ObjModel planemodel = CreatePlaneObjModel("plane", 100, 30);
-        BuildTrianglesAndAddToVirtualScene(&planemodel);
+        std::vector<glm::vec2> P = //Pontos de controle da curva bezier
+        {
+            {0, 0},
+            {0, 100},
+            {0, 400},
+            {0, 700},
+            {0, 1000},
+            {0, 1300},
+        };
+
+        std::vector<glm::vec2> T = //tangentes da curva da cubic bezier
+        {
+            {0, 300},
+            {0, 300},
+            {300, 0},
+            {-300, 0},
+            {0, 300},
+            {0, 300}
+        };
+
+        float trackWidth = 20.0f;
+
+        SimpleModel curvedTrack = GenerateCurvedTrackSimpleModel(trackWidth, P, T, 90);
+        // bordas da pista (chão)
+        SimpleModel ground = GenerateCurvedTrackSimpleModel(trackWidth+10, P, T, 90);
+        SimpleModel edge = GenerateCurvedTrackSimpleModel(trackWidth+15, P, T, 90);
+        BuildSimpleObjAndAddToVirtualScene("curve", curvedTrack);
+        BuildSimpleObjAndAddToVirtualScene("ground", ground);
+        BuildSimpleObjAndAddToVirtualScene("edge", edge);
 
         // Carregamos partes do carro
         // Grupos pertencentes ao objeto:
@@ -494,7 +534,7 @@ int main(int argc, char* argv[])
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -450.0f; // Posição do "far plane"
+        float farplane  = -1000.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -531,25 +571,38 @@ int main(int argc, char* argv[])
         #define CAR_PLAQUES 3
         #define CAR_TYRES 4
         #define CAR_GLASSES 5
+        #define TRACK 6
+        #define GROUND 7
+        #define EDGE 8
 
         // _______________________>>_____________________>>>>  desenho dos objetos
 
             // Skybox primeiro, pois fica atrás de tudo
             model =  carInfo.getTranslationMatrix()
-                * Matrix_Scale(-150.0f, 150.0f, 150.0f);  // esfera gigante
+                * Matrix_Scale(-800.0f, 800.0f, 800.0f);  // esfera gigante
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, SKYBOX);
             DrawVirtualObject("the_sphere");
-            
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 3);
 
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 4);
+
+            // Não há scale pois o tamanho da curva e plano ja é previamente definido
             model = Matrix_Identity();
-            // model = Matrix_Scale(200.0f, 1.0f, 200.0f);
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-            glUniform1i(g_object_id_uniform, CAR_TYRES);
-            DrawVirtualObject("plane");
+            glUniform1i(g_object_id_uniform, EDGE);
+            DrawVirtualObject("edge");
+
+            model = Matrix_Translate(0.0f, 0.1f, 0.0f); //Pequena translação vertical imperceptivel para evitar z-fighting
+            glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, GROUND);
+            DrawVirtualObject("ground");
+
+            model = Matrix_Translate(0.0f, 0.2f, 0.0f); //Pequena translação vertical imperceptivel para evitar z-fighting
+            glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, TRACK);
+            DrawVirtualObject("curve");
 
 
             // Desenhamos as partes do carro
@@ -757,6 +810,8 @@ void LoadShadersFromFiles()
     glUseProgram(g_GpuProgramID);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage1"), 1);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage2"), 2);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage3"), 3);
     glUseProgram(0);
 }
 
@@ -1844,7 +1899,7 @@ GLuint LoadCubemap(std::vector<std::string> faces)
     glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
     int width, height, nrChannels;
-    stbi_set_flip_vertically_on_load(false); // VERY IMPORTANT for cubemaps
+    stbi_set_flip_vertically_on_load(false);
 
     for (GLuint i = 0; i < faces.size(); i++)
     {
@@ -1882,79 +1937,212 @@ GLuint LoadCubemap(std::vector<std::string> faces)
     return textureID;
 }
 
-ObjModel CreatePlaneObjModel(const std::string& object_name, float width, float length)
+SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 startingPoint)
 {
-    printf("Gerando modelo de plano '%s'...\n", object_name.c_str());
+    SimpleModel model;
 
-    ObjModel plane_model;
+    float w = width  * 0.5f;
+    float l = length * 0.5f;
+    glm::vec3 sp = glm::vec3(startingPoint.x, startingPoint.y, startingPoint.z);
+    model.coordinates =
+    {
+        glm::vec3(-w, 0.0f, 0.0f) + sp,
+        glm::vec3( w, 0.0f, 0.0f) + sp,
+        glm::vec3( w, 0.0f,  2*l) + sp,
+        glm::vec3(-w, 0.0f,  2*l) + sp
+    };
 
-    // 1. Calculate half-dimensions and define constants
-    float hx = width * 0.5f;
-    float hz = length * 0.5f;
-    
-    // Normal is constant: pointing straight up (Y-axis)
-    const float nx = 0.0f;
-    const float ny = 1.0f;
-    const float nz = 0.0f;
+    // Normais apontando para cima
+    model.normals =
+    {
+        glm::vec3(0,1,0),
+        glm::vec3(0,1,0),
+        glm::vec3(0,1,0),
+        glm::vec3(0,1,0)
+    };
 
-    // 2. Populate 'attrib' (Vertices and Normals)
-    
-    // A. Vertices (3 floats per vertex: X, Y, Z)
-    // The plane sits on the XZ plane at Y=0.
-    
-    // Vertex 0: (-hx, 0, -hz)
-    plane_model.attrib.vertices.insert(plane_model.attrib.vertices.end(), {-hx, 0.0f, -hz});
-    // Vertex 1: (hx, 0, -hz)
-    plane_model.attrib.vertices.insert(plane_model.attrib.vertices.end(), { hx, 0.0f, -hz});
-    // Vertex 2: (hx, 0, hz)
-    plane_model.attrib.vertices.insert(plane_model.attrib.vertices.end(), { hx, 0.0f,  hz});
-    // Vertex 3: (-hx, 0, hz)
-    plane_model.attrib.vertices.insert(plane_model.attrib.vertices.end(), {-hx, 0.0f,  hz});
-    
-    // B. Normals (3 floats per normal: NX, NY, NZ)
-    // Since all four vertices share the same normal, we only need to store it once.
-    plane_model.attrib.normals.insert(plane_model.attrib.normals.end(), {nx, ny, nz});
+    model.indices =
+    {
+        0, 2, 1,
+        0, 3, 2
+    };
 
-    // C. Texture Coordinates (2 floats per coordinate: U, V)
-    // We define 4 unique texture coordinates corresponding to the 4 vertices.
-    
-    // Texcoord Index 0: (0, 0)
-    plane_model.attrib.texcoords.insert(plane_model.attrib.texcoords.end(), {0.0f, 0.0f});
-    // Texcoord Index 1: (width, 0)
-    plane_model.attrib.texcoords.insert(plane_model.attrib.texcoords.end(), {width, 0.0f});
-    // Texcoord Index 2: (width, length)
-    plane_model.attrib.texcoords.insert(plane_model.attrib.texcoords.end(), {width, length});
-    // Texcoord Index 3: (0, length)
-    plane_model.attrib.texcoords.insert(plane_model.attrib.texcoords.end(), {0.0f, length});
+    return model;
+}
 
-    // 3. Populate 'shapes' (The triangles and their indices)
-    
-    tinyobj::shape_t shape;
-    shape.name = object_name;
-    
-    // The plane consists of two triangles: (0, 1, 2) and (2, 3, 0).
-    // The tinyobj::index_t stores three indices: vertex_index, normal_index, texcoord_index.
-    
-    // Since we only have one normal defined (at index 0) and no texture coordinates (-1),
-    // normal_index is 0 and texcoord_index is -1 for all vertices.
+void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model)
+{
+    std::vector<float> model_coefficients;
+    std::vector<float> normal_coefficients;
 
-    // Triangle 1: (V0, V1, V2)
-    shape.mesh.indices.push_back({0, 0, -1}); // V0, N0, no Texcoord
-    shape.mesh.indices.push_back({1, 0, -1}); // V1, N0, no Texcoord
-    shape.mesh.indices.push_back({2, 0, -1}); // V2, N0, no Texcoord
-    
-    // Triangle 2: (V2, V3, V0)
-    shape.mesh.indices.push_back({2, 0, -1}); // V2, N0, no Texcoord
-    shape.mesh.indices.push_back({3, 0, -1}); // V3, N0, no Texcoord
-    shape.mesh.indices.push_back({0, 0, -1}); // V0, N0, no Texcoord
+    model_coefficients.reserve(model.coordinates.size() * 4);
+    normal_coefficients.reserve(model.normals.size() * 4);
 
-    // Mark the number of vertices per face (always 3 for triangles)
-    shape.mesh.num_face_vertices.insert(shape.mesh.num_face_vertices.end(), {3, 3});
-    
-    // Add the shape to the model's list of shapes
-    plane_model.shapes.push_back(shape);
-    
-    printf("OK. Modelo gerado com 4 vertices e 2 faces.\n");
+    // Coordinates
+    for (const auto& p : model.coordinates)
+    {
+        model_coefficients.push_back(p.x);
+        model_coefficients.push_back(p.y);
+        model_coefficients.push_back(p.z);
+        model_coefficients.push_back(1.0f); // vec4 w-component
+    }
 
-    return plane_model;
+    // --------------------------------------------------------
+    // Normals
+    // --------------------------------------------------------
+    for (const auto& n : model.normals)
+    {
+        normal_coefficients.push_back(n.x);
+        normal_coefficients.push_back(n.y);
+        normal_coefficients.push_back(n.z);
+        normal_coefficients.push_back(0.0f); // vec4 normal w-component
+    }
+
+    SceneObject obj;
+    glGenVertexArrays(1, &obj.vertex_array_object_id);
+    glBindVertexArray(obj.vertex_array_object_id);
+
+    GLuint VBO_model_coefficients_id;
+    glGenBuffers(1, &VBO_model_coefficients_id);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_model_coefficients_id);
+
+    glBufferData(GL_ARRAY_BUFFER, model_coefficients.size() * sizeof(float), NULL, GL_STATIC_DRAW);
+
+    glBufferSubData(GL_ARRAY_BUFFER, 0, model_coefficients.size() * sizeof(float), model_coefficients.data());
+
+    GLuint location = 0;
+    GLint number_of_dimensions = 4;
+
+    glVertexAttribPointer(location, number_of_dimensions, GL_FLOAT, GL_FALSE,0, 0);
+    glEnableVertexAttribArray(location);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    if (!normal_coefficients.empty())
+    {
+        GLuint VBO_normal_coefficients_id;
+        glGenBuffers(1, &VBO_normal_coefficients_id);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_normal_coefficients_id);
+        glBufferData(GL_ARRAY_BUFFER, normal_coefficients.size() * sizeof(float), NULL, GL_STATIC_DRAW);
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, normal_coefficients.size() * sizeof(float), normal_coefficients.data());
+        location = 1;
+        number_of_dimensions = 4;
+        glVertexAttribPointer(location, number_of_dimensions, GL_FLOAT, GL_FALSE, 0, 0);
+        glEnableVertexAttribArray(location);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+    GLuint indices_id;
+    glGenBuffers(1, &indices_id);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_id);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.indices.size() * sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, model.indices.size() * sizeof(GLuint), model.indices.data());
+
+    glBindVertexArray(0);
+
+    obj.name = object_name;
+    obj.first_index = 0;
+    obj.num_indices = static_cast<GLuint>(model.indices.size());
+    obj.rendering_mode = GL_TRIANGLES;
+    g_VirtualScene[object_name] = obj;
+
+
+    std::cout << "Simple Obj carregado para cena virtual: " << object_name << std::endl;
+}
+
+SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment = 20)
+{
+    SimpleModel model;
+    // 
+    int N = controlPointsXZ.size();
+    if (N < 2 || controlTangentsXZ.size() != N)
+    {
+        std::cerr << "Invalid input for curved track." << std::endl;
+        return model;
+    }
+
+    float halfW = width * 0.5f;
+
+    // ==================================================
+    // função lambda para o Hermite cubic interpolation
+    // ======================================================
+    auto hermite = [](float t, const glm::vec2& P0, const glm::vec2& P1,
+                      const glm::vec2& T0, const glm::vec2& T1)
+    {
+        float t2 = t * t;
+        float t3 = t2 * t;
+
+        float h00 =  2*t3 - 3*t2 + 1;
+        float h10 =      t3 - 2*t2 + t;
+        float h01 = -2*t3 + 3*t2;
+        float h11 =      t3 -   t2;
+
+        return h00 * P0 + h10 * T0 + h01 * P1 + h11 * T1;
+    };
+
+    // ============================================================
+    // constroi vertices da curva piecewise
+    // ======================================================
+    for (int i = 0; i < N - 1; i++)
+    {
+        glm::vec2 P0 = controlPointsXZ[i];
+        glm::vec2 P1 = controlPointsXZ[i+1];
+        glm::vec2 T0 = controlTangentsXZ[i];
+        glm::vec2 T1 = controlTangentsXZ[i+1];
+
+        for (int s = 0; s <= samplesPerSegment; s++)
+        {
+            float t = float(s) / samplesPerSegment;
+
+            // Centro do trilho
+            glm::vec2 centerXZ = hermite(t, P0, P1, T0, T1);
+
+            float t2 = t * t;
+
+            glm::vec2 dHdt =
+                (6*t2 - 6*t) * P0 +
+                (3*t2 - 4*t + 1) * T0 +
+                (-6*t2 + 6*t) * P1 +
+                (3*t2 - 2*t) * T1;
+
+            glm::vec2 tangent = glm::normalize(dHdt);
+
+            // Vetor perpendicular no plano XZ 
+            glm::vec2 right2D = glm::vec2(tangent.y, -tangent.x); // rotaciona -90°
+            glm::vec2 left2D  = -right2D;
+
+            glm::vec3 center3D(centerXZ.x, 0.0f, centerXZ.y);
+
+            // extremidades da pista
+            glm::vec3 leftV  = center3D + glm::vec3(left2D.x,  0.0f, left2D.y)  * halfW;
+            glm::vec3 rightV = center3D + glm::vec3(right2D.x, 0.0f, right2D.y) * halfW;
+
+            // Adiciona ao modelo
+            model.coordinates.push_back(leftV);
+            model.coordinates.push_back(rightV);
+
+            // Normais para cima
+            model.normals.push_back(glm::vec3(0,1,0));
+            model.normals.push_back(glm::vec3(0,1,0));
+        }
+    }
+
+    // Constroi os indices dos triangulos
+    int totalVerts = model.coordinates.size();
+    for (int i = 0; i < totalVerts - 2; i += 2)
+    {
+        GLuint L0 = i;
+        GLuint R0 = i + 1;
+        GLuint L1 = i + 2;
+        GLuint R1 = i + 3;
+
+        model.indices.push_back(L0);
+        model.indices.push_back(L1);
+        model.indices.push_back(R0);
+
+        model.indices.push_back(R0);
+        model.indices.push_back(L1);
+        model.indices.push_back(R1);
+    }
+
+    return model;
 }
