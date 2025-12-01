@@ -356,6 +356,7 @@ int main(int argc, char* argv[])
         LoadTextureImage("../../data/asphalt.jpg");  // TextureImage1
         LoadTextureImage("../../data/aerial_grass_rock_diff_1k.png");  // TextureImage2
         LoadTextureImage("../../data/damaged_plaster_diff_1k.png");  // TextureImage3
+        LoadTextureImage("../../data/pngtree-silver-wheel-car-tyre-png-image_10625488.png");  // TextureImage4
         std::vector<std::string> faces
         {
             "../../data/skybox_px.png", 
@@ -426,7 +427,7 @@ int main(int argc, char* argv[])
         ObjModel carmodel("../../data/carro_agrupado.obj");
         ComputeNormals(&carmodel);
         BuildTrianglesAndAddToVirtualScene(&carmodel);
-
+        
 
     // _______________________<<_______________________<<<<<<
 
@@ -519,7 +520,6 @@ int main(int argc, char* argv[])
                     break;
                 default:;
             }
-
             // Computamos a matriz "View" utilizando os parâmetros da câmera para
             // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
             glm::mat4 view = Matrix_Camera_View(g_CameraPosition, g_CameraViewVector, g_CameraUpVector);
@@ -569,10 +569,11 @@ int main(int argc, char* argv[])
         #define CAR_BODY 2
         #define CAR_PLAQUES 3
         #define CAR_TYRES 4
-        #define CAR_GLASSES 5
-        #define TRACK 6
-        #define GROUND 7
-        #define EDGE 8
+        #define CAR_TYRES_BACK 5
+        #define CAR_GLASSES 6
+        #define TRACK 7
+        #define GROUND 8
+        #define EDGE 9
 
         // _______________________>>_____________________>>>>  desenho dos objetos
 
@@ -583,9 +584,9 @@ int main(int argc, char* argv[])
             glUniform1i(g_object_id_uniform, SKYBOX);
             DrawVirtualObject("the_sphere");
 
-            glActiveTexture(GL_TEXTURE4);
+            glActiveTexture(GL_TEXTURE5);
             glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 4);
+            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 5);
 
             // Não há scale pois o tamanho da curva e plano ja é previamente definido
             model = Matrix_Identity();
@@ -609,10 +610,6 @@ int main(int argc, char* argv[])
                 model = carInfo.getTranslationMatrix()*
                 Matrix_Scale(0.03f, 0.03f, 0.03f)*
                 carInfo.getMatrixRotate();
-                
-                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-                glUniform1i(g_object_id_uniform, CAR_BODY);
-                DrawVirtualObject("the_car");
 
                 // Desenha rodas com rotação a partir da velocidade
                 PushMatrix(model);
@@ -620,10 +617,13 @@ int main(int argc, char* argv[])
                     // model*Matrix_Rotate();
                     glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
                     glUniform1i(g_object_id_uniform, CAR_TYRES);
-                    DrawVirtualObject("roda_anterior_esquerda");
                     DrawVirtualObject("roda_dianteira_esquerda");
-                    DrawVirtualObject("roda_anterior_direita");
                     DrawVirtualObject("roda_dianteira_direita");
+                    // OBS: Tivemos que definir tags de shaders diferentes para as rodas dianteiras, para consertar a textura
+                    // Que estava com bbox errado para as rodas de trás
+                    glUniform1i(g_object_id_uniform, CAR_TYRES_BACK);
+                    DrawVirtualObject("roda_anterior_esquerda");
+                    DrawVirtualObject("roda_anterior_direita");
                 PopMatrix(model);
                 glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
                 glUniform1i(g_object_id_uniform, CAR_BODY);
@@ -811,6 +811,7 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage1"), 1);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage2"), 2);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage3"), 3);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage4"), 4);
     glUseProgram(0);
 }
 
@@ -1866,6 +1867,7 @@ void updateFromKeyboard(){
         if(keyInfo.reverse_held){
             g_CameraPosition-=cameraVel*elapsedTime*g_CameraViewVector;            
         }
+
     }else{
         // Controls car if camera is lookat
         if(keyInfo.forwards_held) carInfo.setAccelerate(true);

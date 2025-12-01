@@ -28,10 +28,11 @@ uniform mat4 projection;
 #define CAR_BODY 2
 #define CAR_PLAQUES 3
 #define CAR_TYRES 4
-#define CAR_GLASSES 5
-#define TRACK 6
-#define GROUND 7
-#define EDGE 8
+#define CAR_TYRES_BACK 5
+#define CAR_GLASSES 6
+#define TRACK 7
+#define GROUND 8
+#define EDGE 9
 
 uniform int object_id;
 
@@ -43,6 +44,7 @@ uniform sampler2D TextureImage0;
 uniform sampler2D TextureImage1;
 uniform sampler2D TextureImage2;
 uniform sampler2D TextureImage3;
+uniform sampler2D TextureImage4;
 uniform samplerCube SkyboxCube;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
@@ -129,6 +131,20 @@ void main()
         Kd= vec3(0.7, 0.7, 0.7);
         Ks = vec3(0.9, 0.9, 0.1);
         q=90;
+    }
+    else if (object_id == CAR_TYRES){
+        // Projeção planar no plano YZ 
+        U = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
+        V = (position_model.z - bbox_min.z) / (bbox_max.z - bbox_min.z);
+        Kd = texture(TextureImage4, vec2(U,V)).rgb;
+        
+    }
+    else if (object_id == CAR_TYRES_BACK){
+        // Projeção planar no plano YZ 
+        // Conserto no bbox, multiplicamos por 2.8 pois o bbox estava com o dobro do tamanho (bug, vertex fantasma)
+        U = (position_model.y - bbox_min.y)/(bbox_max.y - bbox_min.y);
+        V = (position_model.z - bbox_min.z)*2.8/(bbox_max.z - bbox_min.z);
+        Kd = texture(TextureImage4, vec2(U,V)).rgb;
     }
     else if (object_id == TRACK)
     {
