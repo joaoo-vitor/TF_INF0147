@@ -222,7 +222,7 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // renderização.
 float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 12.0f; // Distância da câmera para o ponto look-at
+float g_CameraDistance = 9.0f; // Distância da câmera para o ponto look-at
 
 // Variável que controla o tipo de projeção utilizada: perspectiva ou ortográfica.
 bool g_UsePerspectiveProjection = true;
@@ -305,7 +305,7 @@ int main(int argc, char* argv[])
     // Criamos uma janela do sistema operacional, com 800 colunas e 600 linhas
     // de pixels, e com título "INF01047 ...".
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "Trabalho Final - Car", NULL, NULL);
+    window = glfwCreateWindow(800, 600, "Trabalho Final - Heaven Race", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -356,7 +356,10 @@ int main(int argc, char* argv[])
         LoadTextureImage("../../data/asphalt.jpg");  // TextureImage1
         LoadTextureImage("../../data/aerial_grass_rock_diff_1k.png");  // TextureImage2
         LoadTextureImage("../../data/damaged_plaster_diff_1k.png");  // TextureImage3
-        LoadTextureImage("../../data/pngtree-silver-wheel-car-tyre-png-image_10625488.png");  // TextureImage4
+        LoadTextureImage("../../data/car_wheel.png");  // TextureImage4
+        LoadTextureImage("../../data/lamp_texture.jpg");  // TextureImage5
+        LoadTextureImage("../../data/lamp_texture1.png");  // TextureImage6
+        LoadTextureImage("../../data/finish_line.jpg");  // TextureImage7
         std::vector<std::string> faces
         {
             "../../data/skybox_px.png", 
@@ -377,6 +380,10 @@ int main(int argc, char* argv[])
         ObjModel sphereModel("../../data/sphere.obj");
         ComputeNormals(&sphereModel);
         BuildTrianglesAndAddToVirtualScene(&sphereModel);
+
+        ObjModel lampModel("../../data/street_lamp.obj");
+        ComputeNormals(&lampModel);
+        BuildTrianglesAndAddToVirtualScene(&lampModel);
 
         ObjModel planeModel("../../data/plane.obj");
         ComputeNormals(&planeModel);
@@ -405,9 +412,9 @@ int main(int argc, char* argv[])
         float trackWidth = 20.0f;
 
         SimpleModel curvedTrack = GenerateCurvedTrackSimpleModel(trackWidth, P, T, 90);
-        // bordas da pista (chão)
-        SimpleModel ground = GenerateCurvedTrackSimpleModel(trackWidth+10, P, T, 90);
-        SimpleModel edge = GenerateCurvedTrackSimpleModel(trackWidth+15, P, T, 90);
+        // bordas da pista (meio-fio)
+        SimpleModel edge = GenerateCurvedTrackSimpleModel(trackWidth+3, P, T, 90);
+        SimpleModel ground = GenerateCurvedTrackSimpleModel(trackWidth+15, P, T, 90);
         BuildSimpleObjAndAddToVirtualScene("curve", curvedTrack);
         BuildSimpleObjAndAddToVirtualScene("ground", ground);
         BuildSimpleObjAndAddToVirtualScene("edge", edge);
@@ -574,6 +581,8 @@ int main(int argc, char* argv[])
         #define TRACK 7
         #define GROUND 8
         #define EDGE 9
+        #define LAMP 10
+        #define FINISH_LINE 11
 
         // _______________________>>_____________________>>>>  desenho dos objetos
 
@@ -584,26 +593,49 @@ int main(int argc, char* argv[])
             glUniform1i(g_object_id_uniform, SKYBOX);
             DrawVirtualObject("the_sphere");
 
-            glActiveTexture(GL_TEXTURE5);
+            glActiveTexture(GL_TEXTURE8);
             glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 5);
+            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 8);
 
             // Não há scale pois o tamanho da curva e plano ja é previamente definido
             model = Matrix_Identity();
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-            glUniform1i(g_object_id_uniform, EDGE);
-            DrawVirtualObject("edge");
+            glUniform1i(g_object_id_uniform, GROUND);
+            DrawVirtualObject("ground");
 
             model = Matrix_Translate(0.0f, 0.1f, 0.0f); //Pequena translação vertical imperceptivel para evitar z-fighting
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-            glUniform1i(g_object_id_uniform, GROUND);
-            DrawVirtualObject("ground");
+            glUniform1i(g_object_id_uniform, EDGE);
+            DrawVirtualObject("edge");
 
             model = Matrix_Translate(0.0f, 0.2f, 0.0f); //Pequena translação vertical imperceptivel para evitar z-fighting
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, TRACK);
             DrawVirtualObject("curve");
 
+            // Chegada da corrida
+            model = Matrix_Translate(0.0f, 1.3f, 1300.0f)*
+            Matrix_Scale(35.0f/2, 2.5f, 3.0f)*
+            Matrix_Rotate_X(-M_PI_2);
+            glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, FINISH_LINE);
+            DrawVirtualObject("the_plane");
+
+            // Desenha os postes do jogo 
+            // lamps guarda as coordenadas XZ dos postes na pista
+            std::vector<glm::vec2> lamps;
+            lamps.push_back(glm::vec2(-29.89f, 401.308f));
+            lamps.push_back(glm::vec2(31.93f, 675.0f));
+            lamps.push_back(glm::vec2(-7.93, 1199.58));
+
+            for (const auto& lamp : lamps)
+            {
+                model = Matrix_Translate(lamp.x, 0.0f, lamp.y)
+                *Matrix_Scale(0.06f, 0.06f, 0.06f);
+                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                glUniform1i(g_object_id_uniform, LAMP);
+                DrawVirtualObject("lamp");
+            }
 
             // Desenhamos as partes do carro
             PushMatrix(model);
@@ -812,6 +844,9 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage2"), 2);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage3"), 3);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage4"), 4);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage5"), 5);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage6"), 6);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage7"), 7);
     glUseProgram(0);
 }
 

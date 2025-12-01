@@ -33,6 +33,9 @@ uniform mat4 projection;
 #define TRACK 7
 #define GROUND 8
 #define EDGE 9
+#define LAMP 10
+#define FINISH_LINE 11
+
 
 uniform int object_id;
 
@@ -45,6 +48,9 @@ uniform sampler2D TextureImage1;
 uniform sampler2D TextureImage2;
 uniform sampler2D TextureImage3;
 uniform sampler2D TextureImage4;
+uniform sampler2D TextureImage5;
+uniform sampler2D TextureImage6;
+uniform sampler2D TextureImage7;
 uniform samplerCube SkyboxCube;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
@@ -136,8 +142,16 @@ void main()
         // Projeção planar no plano YZ 
         U = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
         V = (position_model.z - bbox_min.z) / (bbox_max.z - bbox_min.z);
-        Kd = texture(TextureImage4, vec2(U,V)).rgb;
-        
+        Kd = texture(TextureImage4, vec2(U,V)).rgb; 
+    }
+    else if (object_id == LAMP){
+        // Projeção cilindrica
+        float angle = atan(position_model.x - bbox_min.x, position_model.z - bbox_min.z);
+        U = (angle + M_PI) / (2.0 * M_PI);
+        V = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
+        Kd = texture(TextureImage5, vec2(U,V)).rgb; 
+        Ks = texture(TextureImage6, vec2(U,V)).rgb; 
+        q=100;
     }
     else if (object_id == CAR_TYRES_BACK){
         // Projeção planar no plano YZ 
@@ -175,6 +189,14 @@ void main()
         V = position_world.z/1024*100;
         Kd = texture(TextureImage3, vec2(U,V)).rgb;
         Ks = vec3(0.0, 0.0, 0.0);
+    }
+    else if (object_id == FINISH_LINE)
+    {
+        // Propriedades espectrais do plano 
+        light_model=LIGHT_MODEL_LAMBERT;
+        U = position_model.x/600*100;
+        V = position_model.z/240*100;
+        Kd = texture(TextureImage7, vec2(U,V)).rgb;
     }
     else if(object_id == SKYBOX){
         light_model=LIGHT_MODEL_NO_MODEL;
