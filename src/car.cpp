@@ -7,6 +7,15 @@
 #include <numeric>
 #include <iostream>
 #include <limits>
+#include "lamp.cpp"
+
+const float BB_MIN_X = -1.52f;
+const float BB_MAX_X = 1.52f;
+const float BB_MIN_Y = 0.1545f;
+const float BB_MAX_Y = 1.47f;
+const float BB_MIN_Z = -2.80f;
+const float BB_MAX_Z = 2.80f;
+
 
 #define M_PI   3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
@@ -199,9 +208,45 @@ public:
     void updateForwardsVector(){
     	forwardsVector = getMatrixRotate() * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
     }
+    void crashCar(){
+        velocity=glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
 
     glm::vec3 getRotation(){
         return rotation;
+    }
+
+    bool checkColisionWithLamp(Lamp lamp){
+        // Vetor de planos
+        // Cada plano tem 4 pontos
+        std::vector<glm::vec4> car_vertices(8);
+
+        // Calculate the world coordinates of the 8 bounding box corners
+        float centerX = position.x;
+        float centerY = position.y; // Assuming p_car.y is the center height of the car's BB
+        float centerZ = position.z;
+
+        // Assuming the bounding box coordinates are relative to the car's anchor point (p_car),
+        // we use the min/max values directly as offsets from the center/anchor.
+        
+        // Vertices de baixo do paralelogramo
+        car_vertices[0] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MIN_Y, position.z + BB_MIN_Z, 1.0f);
+        car_vertices[1] = glm::vec4(position.x + BB_MAX_X, position.y + BB_MIN_Y, position.z + BB_MIN_Z, 1.0f);
+        car_vertices[2] = glm::vec4(position.x + BB_MAX_X, position.y + BB_MIN_Y, position.z + BB_MAX_Z, 1.0f);
+        car_vertices[3] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MIN_Y, position.z+ BB_MAX_Z, 1.0f);
+
+        // Vertices de cima do paralelogramo
+        car_vertices[4] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MAX_Y, position.z + BB_MIN_Z, 1.0f);
+        car_vertices[5] = glm::vec4(position.x + BB_MAX_X, position.y + BB_MAX_Y, position.z + BB_MIN_Z, 1.0f);
+        car_vertices[6] = glm::vec4(position.x + BB_MAX_X, position.y + BB_MAX_Y, position.z + BB_MAX_Z, 1.0f);
+        car_vertices[7] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MAX_Y, position.z + BB_MAX_Z, 1.0f);
+
+
+        return lamp.checkColisionWithPlane(car_vertices);
+    }
+
+    void setPosition(glm::vec4 newPosition){
+        position = newPosition;
     }
 
     void update(float elapsed_time){

@@ -5,8 +5,9 @@
 //    INF01047 Fundamentos de Computação Gráfica
 //               Prof. Eduardo Gastal
 //
-//                   LABORATÓRIO 5
-//
+//                   Trabalho FINAL
+// João Vitor de Souza (581431)
+// Ricardo
 
 // Arquivos "headers" padrões de C podem ser incluídos em um
 // programa C++, sendo necessário somente adicionar o caractere
@@ -49,6 +50,7 @@
 #include "utils.h"
 #include "matrices.h"
 #include "car.cpp"
+#include "lamp.cpp"
 #include "keyboard.cpp"
 
 // Defines
@@ -171,6 +173,7 @@ GLuint LoadCubemap(std::vector<std::string> faces);
 SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 startingPoint);
 void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model);
 SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment);
+void restartGame();
 
 
 // Funcoes para calculo do tempo de execução
@@ -270,7 +273,7 @@ GLuint g_NumLoadedTextures = 0;
 KEYBOARD keyInfo;
 
 // Objeto com informacoes fisicas do carro
-Car carInfo = Car();
+Car g_CarInfo = Car();
 
 // Variávels para controle do tempo de execução
 float g_TimeOfLastFrame;
@@ -389,18 +392,16 @@ int main(int argc, char* argv[])
         ComputeNormals(&planeModel);
         BuildTrianglesAndAddToVirtualScene(&planeModel);
 
-        std::vector<glm::vec2> P = //Pontos de controle da curva bezier
-        {
+        std::vector<glm::vec2> P ={  //pontos de controle da curva de bezier
             {0, 0},
             {0, 100},
             {0, 400},
             {0, 700},
             {0, 1000},
-            {0, 1300},
+            {0, 1300}
         };
 
-        std::vector<glm::vec2> T = //tangentes da curva da cubic bezier
-        {
+        std::vector<glm::vec2> T = { // tangentes da curva
             {0, 300},
             {0, 300},
             {300, 0},
@@ -435,6 +436,19 @@ int main(int argc, char* argv[])
         ComputeNormals(&carmodel);
         BuildTrianglesAndAddToVirtualScene(&carmodel);
         
+
+    // _______________________<<_______________________<<<<<<
+
+    // _______________________>>_______________________>>>>>>  Obstaculos e colisoes
+
+        // lamps guarda as coordenadas XZ dos postes na pista
+    
+        std::vector<Lamp> lamps;
+        lamps.push_back(Lamp(glm::vec2(-29.89f, 401.308f)));
+        lamps.push_back(Lamp(glm::vec2(31.93f, 675.0f)));
+        lamps.push_back(Lamp(glm::vec2(-7.93, 1199.58f)));
+
+       
 
     // _______________________<<_______________________<<<<<<
 
@@ -485,7 +499,7 @@ int main(int argc, char* argv[])
                     g_JustToggledFreeCamera=false;
                     // Translada 2 unidades no vetor da posição da câmera
                     g_CameraPosition += glm::vec4(0.0f, 3.0f, 0.0f, 0.0f);
-                    g_CameraViewVector = normalize(carInfo.getPosition() - g_CameraPosition);
+                    g_CameraViewVector = normalize(g_CarInfo.getPosition() - g_CameraPosition);
 
                     // Calcula valores iniciais de phi e theta para câmera livre
                     float vx = g_CameraViewVector.x;
@@ -498,7 +512,7 @@ int main(int argc, char* argv[])
             }else{
                 // If if camera is on car, change between types
                 if (g_LeftMouseButtonPressed) g_CameraType = freeLookAt;
-                else if(carInfo.getIsSliding()) g_CameraType = slidingLookAt;
+                else if(g_CarInfo.getIsSliding()) g_CameraType = slidingLookAt;
                 else g_CameraType = lockedLookAt;
             }
 
@@ -508,15 +522,15 @@ int main(int argc, char* argv[])
             switch (g_CameraType){
                 case lockedLookAt:
                 case slidingLookAt:
-                    g_CameraPhi = carInfo.getCameraPhi();
-                    g_CameraTheta = carInfo.getCameraTheta();
+                    g_CameraPhi = g_CarInfo.getCameraPhi();
+                    g_CameraTheta = g_CarInfo.getCameraTheta();
                 case freeLookAt:
                     r = g_CameraDistance;
                     y = r*sin(g_CameraPhi);
                     z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
                     x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
-                    g_CameraPosition  = carInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
-                    camera_lookat_l    = carInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+                    g_CameraPosition  = g_CarInfo.getPosition() + glm::vec4(x,y,z,0.0f); // Ponto "c", centro da câmera
+                    camera_lookat_l    = g_CarInfo.getPosition() + glm::vec4(0.0f, 3.0f, 0.0f, 0.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
                     g_CameraViewVector= normalize(camera_lookat_l - g_CameraPosition); // Vetor "view", sentido para onde a câmera está virada
                     break;
                 case freeCamera:
@@ -587,7 +601,7 @@ int main(int argc, char* argv[])
         // _______________________>>_____________________>>>>  desenho dos objetos
 
             // Skybox primeiro, pois fica atrás de tudo
-            model =  carInfo.getTranslationMatrix()
+            model =  g_CarInfo.getTranslationMatrix()
                 * Matrix_Scale(-800.0f, 800.0f, 800.0f);  // esfera gigante
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, SKYBOX);
@@ -622,15 +636,10 @@ int main(int argc, char* argv[])
             DrawVirtualObject("the_plane");
 
             // Desenha os postes do jogo 
-            // lamps guarda as coordenadas XZ dos postes na pista
-            std::vector<glm::vec2> lamps;
-            lamps.push_back(glm::vec2(-29.89f, 401.308f));
-            lamps.push_back(glm::vec2(31.93f, 675.0f));
-            lamps.push_back(glm::vec2(-7.93, 1199.58));
 
             for (const auto& lamp : lamps)
             {
-                model = Matrix_Translate(lamp.x, 0.0f, lamp.y)
+                model = Matrix_Translate(lamp.positionXZ.x, 0.0f, lamp.positionXZ.y)
                 *Matrix_Scale(0.06f, 0.06f, 0.06f);
                 glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
                 glUniform1i(g_object_id_uniform, LAMP);
@@ -639,9 +648,9 @@ int main(int argc, char* argv[])
 
             // Desenhamos as partes do carro
             PushMatrix(model);
-                model = carInfo.getTranslationMatrix()*
+                model = g_CarInfo.getTranslationMatrix()*
                 Matrix_Scale(0.03f, 0.03f, 0.03f)*
-                carInfo.getMatrixRotate();
+                g_CarInfo.getMatrixRotate();
 
                 // Desenha rodas com rotação a partir da velocidade
                 PushMatrix(model);
@@ -668,8 +677,21 @@ int main(int argc, char* argv[])
 
             PopMatrix(model);
         // ________________________<<______________________<<<<<<
-        TextRendering_ShowVelocity(window, carInfo.getVelocity(), carInfo.getIsSliding());
-        TextRendering_ShowRotation(window, carInfo.getRotation());
+        // _______________________>>_____________________>>>>  Check Colisões
+            for(const Lamp lamp: lamps){
+                if(g_CarInfo.checkColisionWithLamp(lamp)){
+                    restartGame();
+                    break;
+                }
+            }
+
+
+        // ________________________<<______________________<<<<<<
+        
+        
+
+        TextRendering_ShowVelocity(window, g_CarInfo.getVelocity(), g_CarInfo.getIsSliding());
+        TextRendering_ShowRotation(window, g_CarInfo.getRotation());
 
         // Imprimimos na informação sobre a matriz de projeção sendo utilizada.
         //TextRendering_ShowProjection(window);
@@ -696,7 +718,7 @@ int main(int argc, char* argv[])
         updateFromKeyboard();
 
         // Atuliza valores pro carro (para o tempo passado)
-        carInfo.update(getTimeSinceLastFrame());
+        g_CarInfo.update(getTimeSinceLastFrame());
 
         // Atualiza o tempo do ultimo frame
         setEndFrameTime();
@@ -1905,23 +1927,23 @@ void updateFromKeyboard(){
 
     }else{
         // Controls car if camera is lookat
-        if(keyInfo.forwards_held) carInfo.setAccelerate(true);
-        else carInfo.setAccelerate(false);
+        if(keyInfo.forwards_held) g_CarInfo.setAccelerate(true);
+        else g_CarInfo.setAccelerate(false);
 
         float elapsed_time = getTimeSinceLastFrame();
 
-        if(keyInfo.left_held) carInfo.turnLeft(elapsed_time);
+        if(keyInfo.left_held) g_CarInfo.turnLeft(elapsed_time);
 
-        if(keyInfo.right_held) carInfo.turnRight(elapsed_time);
+        if(keyInfo.right_held) g_CarInfo.turnRight(elapsed_time);
 
-        if(keyInfo.brake_held) carInfo.setBrake(true);
-        else carInfo.setBrake(false);
+        if(keyInfo.brake_held) g_CarInfo.setBrake(true);
+        else g_CarInfo.setBrake(false);
 
         if(keyInfo.reverse_held){
-            carInfo.setReverse(true);
-            carInfo.setAccelerate(true);
+            g_CarInfo.setReverse(true);
+            g_CarInfo.setAccelerate(true);
         }else{
-            carInfo.setReverse(false);
+            g_CarInfo.setReverse(false);
         };
     }
 }
@@ -2023,9 +2045,7 @@ void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const Si
         model_coefficients.push_back(1.0f); // vec4 w-component
     }
 
-    // --------------------------------------------------------
-    // Normals
-    // --------------------------------------------------------
+    // Normais
     for (const auto& n : model.normals)
     {
         normal_coefficients.push_back(n.x);
@@ -2088,7 +2108,6 @@ void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const Si
 SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment = 20)
 {
     SimpleModel model;
-    // 
     int N = controlPointsXZ.size();
     if (N < 2 || controlTangentsXZ.size() != N)
     {
@@ -2174,11 +2193,15 @@ SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::v
         model.indices.push_back(L0);
         model.indices.push_back(L1);
         model.indices.push_back(R0);
-
         model.indices.push_back(R0);
         model.indices.push_back(L1);
         model.indices.push_back(R1);
     }
 
     return model;
+}
+
+void restartGame(){
+    g_CarInfo.crashCar(); //stop car 
+    g_CarInfo.setPosition(glm::vec4(0.0f, 0.1f, 10.0f, 1.0f));
 }
