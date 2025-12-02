@@ -10,6 +10,11 @@ layout (location = 2) in vec2 texture_coefficients;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform int object_id;
+uniform sampler2D TextureImage5;
+uniform sampler2D TextureImage6;
+uniform vec4 bbox_min;
+uniform vec4 bbox_max;
 
 // Atributos de vértice que serão gerados como saída ("out") pelo Vertex Shader.
 // ** Estes serão interpolados pelo rasterizador! ** gerando, assim, valores
@@ -20,6 +25,23 @@ out vec4 position_model;
 out vec4 normal;
 out vec2 texcoords;
 out vec4 normal_modelspace;
+out vec3 color_v;
+
+// Identificador que define qual objeto está sendo desenhado no momento
+#define PLANE 0
+#define SKYBOX 1
+#define CAR_BODY 2
+#define CAR_PLAQUES 3
+#define CAR_TYRES 4
+#define CAR_TYRES_BACK 5
+#define CAR_GLASSES 6
+#define TRACK 7
+#define GROUND 8
+#define EDGE 9
+#define LAMP 10
+#define FINISH_LINE 11
+
+#define M_PI 3.14159265359
 
 void main()
 {
@@ -62,6 +84,29 @@ void main()
     normal = inverse(transpose(model)) * normal_model;
     normal.w = 0.0;
 
+    if(object_id == LAMP){
+        float U;
+        float V;
+
+        vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
+        vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
+        vec3 Kd = vec3(0.0,0.0,0.0);; // Refletância difusa 
+        vec3 Ka = vec3(0.1,0.1,0.1); // Refletância ambiente 
+
+        vec4 l = normalize(vec4(1.0,1.0,0.0,0.0));
+        vec4 n = normalize(normal);
+        
+        // Projeção cilindrica
+        float angle = atan(position_model.x, position_model.z);
+        U = (angle + M_PI)/ (2.0 * M_PI);
+        V = position_model.y/1024*100;
+        
+        Kd = texture(TextureImage5, vec2(U,V)).rgb*(0.6+0.4*texture(TextureImage6, vec2(U,V)).rgb); 
+        // vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l));
+        vec3 lambert_diffuse_term = Kd * I;
+        vec3 ambient_term = Ka * Ia; // O termo ambiente
+        color_v = lambert_diffuse_term + ambient_term;
+    }
     // Coordenadas de textura obtidas do arquivo OBJ (se existirem!)
     texcoords = texture_coefficients;
     normal_modelspace = normal_model;

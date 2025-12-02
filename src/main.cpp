@@ -54,7 +54,7 @@
 #include "keyboard.cpp"
 
 // Defines
-#define FREE_CAM_VEL 20.0f
+#define FREE_CAM_VEL 100.0f
 #define CAM_TURN_VEL M_PI_2
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
@@ -388,9 +388,8 @@ int main(int argc, char* argv[])
         ComputeNormals(&lampModel);
         BuildTrianglesAndAddToVirtualScene(&lampModel);
 
-        ObjModel planeModel("../../data/plane.obj");
-        ComputeNormals(&planeModel);
-        BuildTrianglesAndAddToVirtualScene(&planeModel);
+        SimpleModel plane = GeneratePlaneSimpleModel(2.0f, 2.0f, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+        BuildSimpleObjAndAddToVirtualScene("the_plane", plane);
 
         std::vector<glm::vec2> P ={  //pontos de controle da curva de bezier
             {0, 0},
@@ -627,16 +626,15 @@ int main(int argc, char* argv[])
             glUniform1i(g_object_id_uniform, TRACK);
             DrawVirtualObject("curve");
 
-            // Chegada da corrida
-            model = Matrix_Translate(0.0f, 1.3f, 1300.0f)*
-            Matrix_Scale(35.0f/2, 2.5f, 3.0f)*
+            // Chegada da corrida (20 unidades antes do final da track)
+            model = Matrix_Translate(0.0f, 1.5f, 1280.0f)*
+            Matrix_Scale(35.0f/2, 0.75f, 3.0f)*
             Matrix_Rotate_X(-M_PI_2);
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, FINISH_LINE);
             DrawVirtualObject("the_plane");
 
             // Desenha os postes do jogo 
-
             for (const auto& lamp : lamps)
             {
                 model = Matrix_Translate(lamp.positionXZ.x, 0.0f, lamp.positionXZ.y)
@@ -858,6 +856,7 @@ void LoadShadersFromFiles()
     g_object_id_uniform  = glGetUniformLocation(g_GpuProgramID, "object_id"); // Variável "object_id" em shader_fragment.glsl
     g_bbox_min_uniform   = glGetUniformLocation(g_GpuProgramID, "bbox_min");
     g_bbox_max_uniform   = glGetUniformLocation(g_GpuProgramID, "bbox_max");
+
 
     // Variáveis em "shader_fragment.glsl" para acesso das imagens de textura
     glUseProgram(g_GpuProgramID);

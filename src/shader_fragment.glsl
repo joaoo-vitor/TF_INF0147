@@ -17,6 +17,9 @@ in vec4 normal_modelspace;
 // Coordenadas de textura obtidas do arquivo OBJ (se existirem!)
 in vec2 texcoords;
 
+// Cor vinda do vertex shader 
+in vec3 color_v;
+
 // Matrizes computadas no código C++ e enviadas para a GPU
 uniform mat4 model;
 uniform mat4 view;
@@ -101,6 +104,8 @@ void main()
     float U = 0.0;
     float V = 0.0;
 
+    bool isGouradInterpolation = false;
+
     if ( object_id == CAR_BODY )
     {   
         // Propriedades espectrais do carro
@@ -145,13 +150,7 @@ void main()
         Kd = texture(TextureImage4, vec2(U,V)).rgb; 
     }
     else if (object_id == LAMP){
-        // Projeção cilindrica
-        float angle = atan(position_model.x - bbox_min.x, position_model.z - bbox_min.z);
-        U = (angle + M_PI) / (2.0 * M_PI);
-        V = (position_model.y - bbox_min.y) / (bbox_max.y - bbox_min.y);
-        Kd = texture(TextureImage5, vec2(U,V)).rgb; 
-        Ks = texture(TextureImage6, vec2(U,V)).rgb; 
-        q=100;
+        isGouradInterpolation=true;
     }
     else if (object_id == CAR_TYRES_BACK){
         // Projeção planar no plano YZ 
@@ -169,6 +168,7 @@ void main()
         U = position_world.x/981*100;
         V = position_world.z/360*100;
         Kd = texture(TextureImage1, vec2(U,V)).rgb;
+
     }else if (object_id == GROUND)
     {
         // Propriedades espectrais do plano 
@@ -193,9 +193,9 @@ void main()
     else if (object_id == FINISH_LINE)
     {
         // Propriedades espectrais do plano 
-        light_model=LIGHT_MODEL_LAMBERT;
-        U = position_model.x/600*100;
-        V = position_model.z/240*100;
+        light_model=LIGHT_MODEL_NO_MODEL;
+        U = position_world.x/600*100;
+        V = position_world.y/240*100;
         Kd = texture(TextureImage7, vec2(U,V)).rgb;
     }
     else if(object_id == SKYBOX){
@@ -211,28 +211,32 @@ void main()
         light_model=LIGHT_MODEL_NO_MODEL;
         Kd = vec3(0.05,0.05,0.05);
     }
+    if(isGouradInterpolation){
+        color.rgb = color_v;
+    }else{
 
-    // Define o modelo de iluminação a partir do tipo
-    if(light_model == LIGHT_MODEL_BLINNPHONG){
-        // TODO - modelo blin phong
-        vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
-        vec3 Ia = vec3(0.13,0.13,0.13); // O espectro da luz ambiente
-        vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // o termo difuso de Lambert
-        vec3 ambient_term = Ka * Ia; // O termo ambiente
+        // Define o modelo de iluminação a partir do tipo
+        if(light_model == LIGHT_MODEL_BLINNPHONG){
+            // TODO - modelo blin phong
+            vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
+            vec3 Ia = vec3(0.13,0.13,0.13); // O espectro da luz ambiente
+            vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // o termo difuso de Lambert
+            vec3 ambient_term = Ka * Ia; // O termo ambiente
 
-        // Blinn-Phong uses half vector
-        vec4 h = normalize(l+v);
-        vec3 phong_specular_term  = Ks * I * pow(max(dot(n, h), 0.0), q); // o termo especular de Phong
-        color.rgb = lambert_diffuse_term + ambient_term + phong_specular_term;
+            // Blinn-Phong uses half vector
+            vec4 h = normalize(l+v);
+            vec3 phong_specular_term  = Ks * I * pow(max(dot(n, h), 0.0), q); // o termo especular de Phong
+            color.rgb = lambert_diffuse_term + ambient_term + phong_specular_term;
 
-    }else if (light_model == LIGHT_MODEL_LAMBERT) {
-        vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
-        vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
-        vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // PREENCHA AQUI o termo difuso de Lambert
-        vec3 ambient_term = Ka * Ia; // O termo ambiente
-        color.rgb = lambert_diffuse_term + ambient_term;
-    } else {
-        color.rgb = Kd;
+        }else if (light_model == LIGHT_MODEL_LAMBERT) {
+            vec3 I = vec3(1.0,1.0,1.0); // O espectro da fonte de luz
+            vec3 Ia = vec3(0.2,0.2,0.2); // O espectro da luz ambiente
+            vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l)); // PREENCHA AQUI o termo difuso de Lambert
+            vec3 ambient_term = Ka * Ia; // O termo ambiente
+            color.rgb = lambert_diffuse_term + ambient_term;
+        } else {
+            color.rgb = Kd;
+        }
     }
 
     color.a = 1;
