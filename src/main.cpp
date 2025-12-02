@@ -315,7 +315,7 @@ int main(int argc, char* argv[])
     // Criamos uma janela do sistema operacional, com 800 colunas e 600 linhas
     // de pixels, e com título "INF01047 ...".
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "Trabalho Final - Agartha Race", NULL, NULL);
+    window = glfwCreateWindow(800, 600, "Trabalho Final - Heaven Race", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -560,7 +560,7 @@ int main(int argc, char* argv[])
             glm::mat4 projection;
         // _______________________<<_______________________<<<<<<
 
-
+        
 
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
@@ -736,6 +736,9 @@ int main(int argc, char* argv[])
 
         // Atualiza o tempo do ultimo frame
         setEndFrameTime();
+
+        // Quando o jogo finaliza e se passam 5s, fecha o jogo
+        if(g_GameFinished && ((g_TimeOfLastFrame - g_startFinalAnimation) >5.0f)) glfwSetWindowShouldClose(window, GL_TRUE);
     }
 
     // Finalizamos o uso dos recursos do sistema operacional
