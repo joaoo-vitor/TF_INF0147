@@ -56,6 +56,7 @@
 // Defines
 #define FREE_CAM_VEL 100.0f
 #define CAM_TURN_VEL M_PI_2
+const glm::vec3 FINISH_LINE_CENTER(0.0f, 1.5f, 1280.0f); // Plane point 'c'
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -173,7 +174,9 @@ GLuint LoadCubemap(std::vector<std::string> faces);
 SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 startingPoint);
 void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model);
 SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment);
+bool checkCarCrossFinishLine(const glm::vec4& carPosition, const glm::vec4& carForwardVector);
 void restartGame();
+void finishGame();
 
 
 // Funcoes para calculo do tempo de execução
@@ -242,12 +245,17 @@ bool g_FreeCameraDoubleSpeed=false;
 // Variável para fazer ações apenas 1x quando trocar pra free camera
 bool g_JustToggledFreeCamera = false;
 
+// Variavel para animação final do jogo
+bool g_GameFinished = false;
+float g_startFinalAnimation=-1; // contagem de tempo para final do jogo
+
 // Variável para dizer o tipo de camera sendo utilizada
 enum cameraType{
     freeCamera,
     freeLookAt,
     lockedLookAt,
-    slidingLookAt
+    slidingLookAt,
+    finalCamera
 };
 
 enum cameraType g_CameraType = freeLookAt;
@@ -277,7 +285,6 @@ Car g_CarInfo = Car();
 
 // Variávels para controle do tempo de execução
 float g_TimeOfLastFrame;
-float g_ElapsedTime;
 
 int main(int argc, char* argv[])
 {
@@ -308,7 +315,7 @@ int main(int argc, char* argv[])
     // Criamos uma janela do sistema operacional, com 800 colunas e 600 linhas
     // de pixels, e com título "INF01047 ...".
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "Trabalho Final - Heaven Race", NULL, NULL);
+    window = glfwCreateWindow(800, 600, "Trabalho Final - Agartha Race", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -514,7 +521,7 @@ int main(int argc, char* argv[])
                 else if(g_CarInfo.getIsSliding()) g_CameraType = slidingLookAt;
                 else g_CameraType = lockedLookAt;
             }
-
+            if(g_GameFinished) g_CameraType = finalCamera;
             // Faz o calculo dos vetores da cãmera
             float r,x,y,z;
             glm::vec4 camera_lookat_l;
@@ -537,6 +544,11 @@ int main(int argc, char* argv[])
                     z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
                     x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
                     g_CameraViewVector= normalize(glm::vec4(x,y,z,0.0f)); // Vetor "view", sentido para onde a câmera está virada
+                    break;
+                case finalCamera:
+                    // Camera sobe lentamente no final do jogo (por cinco segundos, depois fica parada)
+                    g_CameraPosition = glm::vec4(15.0f, 1.0f, 1280.0f, 1.0f) + glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * std::min(5.0f,(g_TimeOfLastFrame-g_startFinalAnimation));
+                    g_CameraViewVector = normalize(g_CarInfo.getPosition() - g_CameraPosition);
                     break;
                 default:;
             }
@@ -627,7 +639,7 @@ int main(int argc, char* argv[])
             DrawVirtualObject("curve");
 
             // Chegada da corrida (20 unidades antes do final da track)
-            model = Matrix_Translate(0.0f, 1.5f, 1280.0f)*
+            model = Matrix_Translate(FINISH_LINE_CENTER.x, FINISH_LINE_CENTER.y, FINISH_LINE_CENTER.z)*
             Matrix_Scale(35.0f/2, 0.75f, 3.0f)*
             Matrix_Rotate_X(-M_PI_2);
             glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
@@ -681,6 +693,10 @@ int main(int argc, char* argv[])
                     restartGame();
                     break;
                 }
+            }
+
+            if(checkCarCrossFinishLine(g_CarInfo.getPosition(), g_CarInfo.getForwardsVector())){
+                finishGame();
             }
 
 
@@ -1390,7 +1406,6 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     // instante de tempo, e usamos esta movimentação para atualizar os
     // parâmetros que definem a posição da câmera dentro da cena virtual.
     // Assim, temos que o usuário consegue controlar a câmera.
-
     if (g_LeftMouseButtonPressed)
     {
 
@@ -1492,9 +1507,11 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
     // Se o usuário apertar a tecla C, fazemos um toggle da camera livre
     if (key == GLFW_KEY_C && action == GLFW_PRESS)
-    {
-        g_UseFreeCamera =  !g_UseFreeCamera;
-        g_JustToggledFreeCamera=true;
+    {   
+        if(!g_GameFinished){
+            g_UseFreeCamera =  !g_UseFreeCamera;
+            g_JustToggledFreeCamera=true;
+        }
     }
     // Se o usuário apertar a tecla CTRL, aumenta a velocidade da camera livre
     if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
@@ -1688,7 +1705,6 @@ float getTimeSinceLastFrame(){
 void setEndFrameTime(){
 
     g_TimeOfLastFrame = (float)glfwGetTime();
-
 }
 
 
@@ -1900,6 +1916,7 @@ void PrintObjModelInfo(ObjModel* model)
 // set makeprg=cd\ ..\ &&\ make\ run\ >/dev/null
 // vim: set spell spelllang=pt_br :
 void updateFromKeyboard(){
+    if(g_GameFinished) return;
     if(g_CameraType==freeCamera){
         // Controls camera if free camera
         float cameraVel=FREE_CAM_VEL;
@@ -2200,7 +2217,33 @@ SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::v
     return model;
 }
 
+bool checkCarCrossFinishLine(const glm::vec4& carPosition, const glm::vec4& carForwardVector){
+    // reta que passa pelo carro             v--- plano de chegada
+    //  ______                             |
+    // ( ---> )                            |
+    //  o    o                             |
+    glm::vec3 a = glm::vec3(carPosition)- 1.5f * glm::vec3(carForwardVector);
+    glm::vec3 b = glm::vec3(carPosition)+ 1.5f * glm::vec3(carForwardVector);
+
+    glm::vec3 n = glm::vec3(0.0f, 0.0f, -1.0f);// normal do plano de chegada
+    glm::vec3 c = FINISH_LINE_CENTER;
+
+    // caso for paralelo
+    if(!dot((b-a), n)) return 0;
+    // se nao for, ve qual o valor de t
+    // substituição da eq da reta na eq do plano
+    float t = dot((c-a), n)/dot((b-a), n);
+    if(t>=0.0 && t<=1.0) return true;
+    else return false;
+}
+
 void restartGame(){
     g_CarInfo.crashCar(); //stop car 
     g_CarInfo.setPosition(glm::vec4(0.0f, 0.1f, 10.0f, 1.0f));
+}
+
+void finishGame(){
+    g_GameFinished = true;
+    g_startFinalAnimation = g_TimeOfLastFrame;
+    g_CarInfo.setAccelerate(0.0f);
 }

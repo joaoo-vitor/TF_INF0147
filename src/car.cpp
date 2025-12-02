@@ -250,7 +250,6 @@ public:
         car_vertices[6] = glm::vec4(position.x + BB_MAX_X, position.y + BB_MAX_Y, position.z + BB_MAX_Z, 1.0f);
         car_vertices[7] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MAX_Y, position.z + BB_MAX_Z, 1.0f);
 
-
         return lamp.checkColisionWithPlane(car_vertices);
     }
 
