@@ -51,12 +51,13 @@
 #include "matrices.h"
 #include "car.cpp"
 #include "lamp.cpp"
+#include "point.cpp"
 #include "keyboard.cpp"
 
 // Defines
 #define FREE_CAM_VEL 100.0f
 #define CAM_TURN_VEL M_PI_2
-const glm::vec3 FINISH_LINE_CENTER(0.0f, 1.5f, 1280.0f); // Plane point 'c'
+const glm::vec3 FINISH_LINE_CENTER(0.0f, 1.5f, 1280.0f); // Ponto central da linha de chegada
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -117,6 +118,7 @@ struct ObjModel
     }
 };
 
+// Struct que define uma malha de vertices com seus normais e indices
 struct SimpleModel
 {
     std::vector<glm::vec3> coordinates; 
@@ -175,11 +177,13 @@ SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 starti
 void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model);
 SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment);
 bool checkCarCrossFinishLine(const glm::vec4& carPosition, const glm::vec4& carForwardVector);
-void restartGame();
+bool checkCarFollowsTrack(const glm::vec4 carPosition, const std::vector<glm::vec2> P_bezier, const std::vector<glm::vec2> T_bezier, float trackWidth);
+void restartGame(bool fallOfTrack = false);
 void finishGame();
+void startGame(); // função chamada para começar o jogo (e sair do menu principal)
 
 
-// Funcoes para calculo do tempo de execução
+// Funções para calculo do tempo de execução
 float getTimeSinceLastFrame();
 void setEndFrameTime();
 
@@ -249,6 +253,8 @@ bool g_JustToggledFreeCamera = false;
 bool g_GameFinished = false;
 float g_startFinalAnimation=-1; // contagem de tempo para final do jogo
 
+bool g_IsInMenuStart = true;
+
 // Variável para dizer o tipo de camera sendo utilizada
 enum cameraType{
     freeCamera,
@@ -315,7 +321,7 @@ int main(int argc, char* argv[])
     // Criamos uma janela do sistema operacional, com 800 colunas e 600 linhas
     // de pixels, e com título "INF01047 ...".
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "Trabalho Final - Heaven Race", NULL, NULL);
+    window = glfwCreateWindow(800, 600, "Trabalho Final - Heaven's Race", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -395,10 +401,14 @@ int main(int argc, char* argv[])
         ComputeNormals(&lampModel);
         BuildTrianglesAndAddToVirtualScene(&lampModel);
 
+        ObjModel pointModel("../../data/monster_ultra_white.obj");
+        ComputeNormals(&pointModel);
+        BuildTrianglesAndAddToVirtualScene(&pointModel);
+
         SimpleModel plane = GeneratePlaneSimpleModel(2.0f, 2.0f, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
         BuildSimpleObjAndAddToVirtualScene("the_plane", plane);
 
-        std::vector<glm::vec2> P ={  //pontos de controle da curva de bezier
+        std::vector<glm::vec2> P_bezier ={  //pontos de controle da curva de bezier
             {0, 0},
             {0, 100},
             {0, 400},
@@ -407,7 +417,7 @@ int main(int argc, char* argv[])
             {0, 1300}
         };
 
-        std::vector<glm::vec2> T = { // tangentes da curva
+        std::vector<glm::vec2> T_bezier = { // vetores tangentes da curva
             {0, 300},
             {0, 300},
             {300, 0},
@@ -418,10 +428,10 @@ int main(int argc, char* argv[])
 
         float trackWidth = 20.0f;
 
-        SimpleModel curvedTrack = GenerateCurvedTrackSimpleModel(trackWidth, P, T, 90);
+        SimpleModel curvedTrack = GenerateCurvedTrackSimpleModel(trackWidth, P_bezier, T_bezier, 90);
         // bordas da pista (meio-fio)
-        SimpleModel edge = GenerateCurvedTrackSimpleModel(trackWidth+3, P, T, 90);
-        SimpleModel ground = GenerateCurvedTrackSimpleModel(trackWidth+15, P, T, 90);
+        SimpleModel edge = GenerateCurvedTrackSimpleModel(trackWidth+3, P_bezier, T_bezier, 90);
+        SimpleModel ground = GenerateCurvedTrackSimpleModel(trackWidth+15, P_bezier, T_bezier, 90);
         BuildSimpleObjAndAddToVirtualScene("curve", curvedTrack);
         BuildSimpleObjAndAddToVirtualScene("ground", ground);
         BuildSimpleObjAndAddToVirtualScene("edge", edge);
@@ -445,14 +455,16 @@ int main(int argc, char* argv[])
 
     // _______________________<<_______________________<<<<<<
 
-    // _______________________>>_______________________>>>>>>  Obstaculos e colisoes
+    // _______________________>>_______________________>>>>>>  Obstaculos e pontos
 
         // lamps guarda as coordenadas XZ dos postes na pista
-    
         std::vector<Lamp> lamps;
         lamps.push_back(Lamp(glm::vec2(-29.89f, 401.308f)));
         lamps.push_back(Lamp(glm::vec2(31.93f, 675.0f)));
         lamps.push_back(Lamp(glm::vec2(-7.93, 1199.58f)));
+        
+        std::vector<Point> points;
+        points.push_back(Point(glm::vec2(0.0f, 100.0f)));
 
        
 
@@ -596,20 +608,22 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        #define PLANE 0
-        #define SKYBOX 1
-        #define CAR_BODY 2
-        #define CAR_PLAQUES 3
-        #define CAR_TYRES 4
-        #define CAR_TYRES_BACK 5
-        #define CAR_GLASSES 6
-        #define TRACK 7
-        #define GROUND 8
-        #define EDGE 9
-        #define LAMP 10
-        #define FINISH_LINE 11
-
         // _______________________>>_____________________>>>>  desenho dos objetos
+        
+            // Define de cada objeto para mandar como id para GPU
+            #define PLANE 0
+            #define SKYBOX 1
+            #define CAR_BODY 2
+            #define CAR_PLAQUES 3
+            #define CAR_TYRES 4
+            #define CAR_TYRES_BACK 5
+            #define CAR_GLASSES 6
+            #define TRACK 7
+            #define GROUND 8
+            #define EDGE 9
+            #define LAMP 10
+            #define FINISH_LINE 11
+            #define POINT 12
 
             // Skybox primeiro, pois fica atrás de tudo
             model =  g_CarInfo.getTranslationMatrix()
@@ -656,6 +670,16 @@ int main(int argc, char* argv[])
                 DrawVirtualObject("lamp");
             }
 
+            // Desenha os pontos
+            for (const auto& point : points)
+            {
+                model = Matrix_Translate(point.position.x, 0.0f, point.position.y)
+                *Matrix_Scale(3.06f, 3.06f, 3.06f);
+                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                glUniform1i(g_object_id_uniform, POINT);
+                DrawVirtualObject("monster");
+            }
+
             // Desenhamos as partes do carro
             PushMatrix(model);
                 model = g_CarInfo.getTranslationMatrix()*
@@ -684,10 +708,11 @@ int main(int argc, char* argv[])
                 glUniform1i(g_object_id_uniform, CAR_PLAQUES);
                 DrawVirtualObject("placas");
                 DrawVirtualObject("logo");
-
             PopMatrix(model);
         // ________________________<<______________________<<<<<<
         // _______________________>>_____________________>>>>  Check Colisões
+            // Colisão com cada uma das lâmpadas (postes)
+            // Colisão plano-cilindro
             for(const Lamp lamp: lamps){
                 if(g_CarInfo.checkColisionWithLamp(lamp)){
                     restartGame();
@@ -695,10 +720,18 @@ int main(int argc, char* argv[])
                 }
             }
 
+            // Colisão do carro com a linha de chegada
+            // Colisão reta-plano
             if(checkCarCrossFinishLine(g_CarInfo.getPosition(), g_CarInfo.getForwardsVector())){
                 finishGame();
             }
 
+            // Colisão do carro com a pista
+            // ponto-superficie de bezier
+            // Se colisão não for detectada, significa que carro saiu da track
+            if(!checkCarFollowsTrack(g_CarInfo.getPosition(), P_bezier, T_bezier, 43.0f)){
+                restartGame(true);
+            }
 
         // ________________________<<______________________<<<<<<
         
@@ -2014,6 +2047,7 @@ GLuint LoadCubemap(std::vector<std::string> faces)
     return textureID;
 }
 
+// Função que gera um plano na forma de coordenadas, normais e indices dos triangulos
 SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 startingPoint)
 {
     SimpleModel model;
@@ -2021,8 +2055,7 @@ SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 starti
     float w = width  * 0.5f;
     float l = length * 0.5f;
     glm::vec3 sp = glm::vec3(startingPoint.x, startingPoint.y, startingPoint.z);
-    model.coordinates =
-    {
+    model.coordinates ={
         glm::vec3(-w, 0.0f, 0.0f) + sp,
         glm::vec3( w, 0.0f, 0.0f) + sp,
         glm::vec3( w, 0.0f,  2*l) + sp,
@@ -2031,22 +2064,19 @@ SimpleModel GeneratePlaneSimpleModel(float width, float length, glm::vec4 starti
 
     // Normais apontando para cima
     model.normals =
-    {
-        glm::vec3(0,1,0),
+    {   glm::vec3(0,1,0),
         glm::vec3(0,1,0),
         glm::vec3(0,1,0),
         glm::vec3(0,1,0)
     };
-
-    model.indices =
-    {
+    model.indices ={
         0, 2, 1,
         0, 3, 2
     };
-
     return model;
 }
 
+// Centralizamos o build de objetos do tipo SimpleModel para adicioná-los à cena virtual
 void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const SimpleModel& model)
 {
     std::vector<float> model_coefficients;
@@ -2124,16 +2154,12 @@ void BuildSimpleObjAndAddToVirtualScene(const std::string& object_name, const Si
     std::cout << "Simple Obj carregado para cena virtual: " << object_name << std::endl;
 }
 
+
+// Função que gera uma curva do tipo SimpleModel usando os pontos e tangentes de uma bezier piecewise, onde o samplesPerSegment é a definição da curva
 SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::vec2>& controlPointsXZ, const std::vector<glm::vec2>& controlTangentsXZ, int samplesPerSegment = 20)
 {
     SimpleModel model;
     int N = controlPointsXZ.size();
-    if (N < 2 || controlTangentsXZ.size() != N)
-    {
-        std::cerr << "Invalid input for curved track." << std::endl;
-        return model;
-    }
-
     float halfW = width * 0.5f;
 
     // ==================================================
@@ -2153,9 +2179,7 @@ SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::v
         return h00 * P0 + h10 * T0 + h01 * P1 + h11 * T1;
     };
 
-    // ============================================================
-    // constroi vertices da curva piecewise
-    // ======================================================
+    // Constrói vertices da curva piecewise
     for (int i = 0; i < N - 1; i++)
     {
         glm::vec2 P0 = controlPointsXZ[i];
@@ -2178,37 +2202,35 @@ SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::v
                 (-6*t2 + 6*t) * P1 +
                 (3*t2 - 2*t) * T1;
 
-            glm::vec2 tangent = glm::normalize(dHdt);
+            glm::vec2 tangent = normalize(dHdt);
 
             // Vetor perpendicular no plano XZ 
-            glm::vec2 right2D = glm::vec2(tangent.y, -tangent.x); // rotaciona -90°
-            glm::vec2 left2D  = -right2D;
-
+            glm::vec2 right2D= glm::vec2(tangent.y, -tangent.x); // rotaciona -90°
+            glm::vec2 left2D= -right2D;
             glm::vec3 center3D(centerXZ.x, 0.0f, centerXZ.y);
 
             // extremidades da pista
-            glm::vec3 leftV  = center3D + glm::vec3(left2D.x,  0.0f, left2D.y)  * halfW;
-            glm::vec3 rightV = center3D + glm::vec3(right2D.x, 0.0f, right2D.y) * halfW;
+            glm::vec3 leftV= center3D + glm::vec3(left2D.x,  0.0f, left2D.y)  * halfW;
+            glm::vec3 rightV= center3D + glm::vec3(right2D.x, 0.0f, right2D.y) * halfW;
 
             // Adiciona ao modelo
             model.coordinates.push_back(leftV);
             model.coordinates.push_back(rightV);
 
             // Normais para cima
-            model.normals.push_back(glm::vec3(0,1,0));
-            model.normals.push_back(glm::vec3(0,1,0));
+            model.normals.push_back(glm::vec3(0.0f,1.0f,0.0f));
+            model.normals.push_back(glm::vec3(0.0f,1.0f,0.0f));
         }
     }
 
     // Constroi os indices dos triangulos
-    int totalVerts = model.coordinates.size();
+    int totalVerts= model.coordinates.size();
     for (int i = 0; i < totalVerts - 2; i += 2)
     {
         GLuint L0 = i;
         GLuint R0 = i + 1;
         GLuint L1 = i + 2;
         GLuint R1 = i + 3;
-
         model.indices.push_back(L0);
         model.indices.push_back(L1);
         model.indices.push_back(R0);
@@ -2234,15 +2256,92 @@ bool checkCarCrossFinishLine(const glm::vec4& carPosition, const glm::vec4& carF
     // caso for paralelo
     if(!dot((b-a), n)) return 0;
     // se nao for, ve qual o valor de t
-    // substituição da eq da reta na eq do plano
+    // substituição da equação da reta na eq do plano
     float t = dot((c-a), n)/dot((b-a), n);
     if(t>=0.0 && t<=1.0) return true;
     else return false;
 }
 
-void restartGame(){
+// Função retorna sim sse o carro estiver colidindo com a pista (está dentro)
+bool checkCarFollowsTrack(const glm::vec4 carPosition, const std::vector<glm::vec2> P_bezier, const std::vector<glm::vec2> T_bezier, float trackWidth){
+    // Verifica em qual bezier cubica estamos dentro
+    glm::vec2 p1,p2;
+    glm::vec2 tg1, tg2;
+    for(int i=0; i< P_bezier.size()-2; i++){
+        if(carPosition.z>=P_bezier[i][1]){
+            if(carPosition.z<P_bezier[i+1][1]){
+                p1 = P_bezier[i];
+                p2 = P_bezier[i+1];
+                tg1 = T_bezier[i];
+                tg2 = T_bezier[i+1];
+                break;
+            }
+        }
+    }
+
+    // Usamos a mesma função lambda para calcular o valor da curva a partir de t, pontos e tangentes
+    auto hermite = [](float t, const glm::vec2& P0, const glm::vec2& P1,
+                      const glm::vec2& T0, const glm::vec2& T1){
+        float t2 = t * t;
+        float t3 = t2 * t;
+        float h00 =  2*t3 - 3*t2 + 1;
+        float h10 =      t3 - 2*t2 + t;
+        float h01 = -2*t3 + 3*t2;
+        float h11 =      t3 -   t2;
+
+        return h00 * P0 + h10 * T0 + h01 * P1 + h11 * T1;
+    };
+    // Fazemos o mesmo para a derivada
+    auto hermite_derivate = [](float t, const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& tg1,
+    const glm::vec2& tg2){
+        float t2 = t * t;
+        float t3 = t2 * t;
+        return (6*t2 - 6*t) * p1 +
+        (3*t2 - 4*t + 1) * tg1 +
+        (-6*t2 + 6*t) * p2 +
+        (3*t2 - 2*t) * tg2;
+    };
+
+
+    // Computamos o valor de t para o z que estamos usando Newton-Raphson (4 iterações)
+    float t=0.5f;
+    for(int i= 0; i<5; i++){
+        glm::vec2 dt = hermite_derivate(t, p1, p2, tg1, tg2);
+        glm::vec2 p = hermite(t, p1, p2, tg1, tg2);
+        
+        if (fabs(dt.y) < 1e-6f){//se a derivada no ponto for zero
+            t=0;
+        }else{
+            t-= (p.y-carPosition.z) / dt.y; //Usa z em tudo
+            t = glm::clamp(t, 0.0f, 1.0f); // Clamp para o intervalo [0,1]
+        }; 
+    }
+
+    // Usando t, encontramos o ponto central da pista para aquele Z
+    glm::vec2 center = hermite(t, p1, p2, tg1, tg2);
+    glm::vec2 tangent = normalize(hermite_derivate(t, p1, p2, tg1, tg2));
+    glm::vec2 normal = glm::vec2(-tangent.y, tangent.x); // Vetor que aponta para o lado da pista
+
+    float halfW = trackWidth * 0.5f;
+    
+    glm::vec2 delta = glm::vec2(carPosition.x, carPosition.z) - center;
+    float dist = glm::dot(delta, normal); //Projetamos o vetor delta no vetor normal
+
+    // std::cout << "t: " << t << ", (p1.y, p2.y): (" << p1.y << ", " << p2.y << ") fabs(dist):" << fabs(dist) << "\n";
+    return std::fabs(dist) <= halfW;
+}
+
+
+void restartGame(bool fallOfTrack){
     g_CarInfo.crashCar(); //stop car 
-    g_CarInfo.setPosition(glm::vec4(0.0f, 0.1f, 10.0f, 1.0f));
+    if(fallOfTrack){
+        // TODO : ligar flag para animar o carro caindo da pista
+    }
+    g_CarInfo.restart();
+}
+
+void startGame(){
+    g_IsInMenuStart = false;
 }
 
 void finishGame(){

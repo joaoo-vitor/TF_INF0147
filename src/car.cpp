@@ -257,6 +257,12 @@ public:
         position = newPosition;
     }
 
+    void restart(){
+        position = glm::vec4(0.0f, 0.1f, 10.0f, 1.0f);
+        velocity = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    }
+
     void update(float elapsed_time){
         //    +    tecla para curva é pressionada
         //    |__..->+    turnAngle é incrementado

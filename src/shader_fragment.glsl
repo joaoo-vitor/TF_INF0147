@@ -38,6 +38,7 @@ uniform mat4 projection;
 #define EDGE 9
 #define LAMP 10
 #define FINISH_LINE 11
+#define POINT 12
 
 
 uniform int object_id;
@@ -211,6 +212,8 @@ void main()
         light_model=LIGHT_MODEL_NO_MODEL;
         Kd = vec3(0.05,0.05,0.05);
     }
+
+    
     if(isGouradInterpolation){
         color.rgb = color_v;
     }else{
