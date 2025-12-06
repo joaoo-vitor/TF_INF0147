@@ -5,5 +5,6 @@ typedef struct keyboard{
 	bool right_held = 0;
 	bool brake_held = 0;
 	bool reverse_held = 0;
+	bool start_held = 0;
 
 }KEYBOARD;

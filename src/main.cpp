@@ -7,7 +7,7 @@
 //
 //                   Trabalho FINAL
 // João Vitor de Souza (581431)
-// Ricardo
+// Ricardo Setton
 
 // Arquivos "headers" padrões de C podem ser incluídos em um
 // programa C++, sendo necessário somente adicionar o caractere
@@ -57,6 +57,7 @@
 // Defines
 #define FREE_CAM_VEL 100.0f
 #define CAM_TURN_VEL M_PI_2
+#define START_CAMERA_SPEED 2.0f*M_PI/40.0f; // 40 segundos para fazer a volta no carro na câmera inicial 
 const glm::vec3 FINISH_LINE_CENTER(0.0f, 1.5f, 1280.0f); // Ponto central da linha de chegada
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
@@ -181,7 +182,12 @@ bool checkCarFollowsTrack(const glm::vec4 carPosition, const std::vector<glm::ve
 void restartGame(bool fallOfTrack = false);
 void finishGame();
 void startGame(); // função chamada para começar o jogo (e sair do menu principal)
+void animateStartCamera(); // Função usada para animar o início do jogo (boas vindas)
 
+
+void TextRendering_ShowStartScreen(GLFWwindow* window);
+void TextRendering_ShowEndResult(GLFWwindow* window);
+void TextRendering_ShowLifeAndPoints(GLFWwindow* window);
 
 // Funções para calculo do tempo de execução
 float getTimeSinceLastFrame();
@@ -230,9 +236,9 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // usuário através do mouse (veja função CursorPosCallback()). A posição
 // efetiva da câmera é calculada dentro da função main(), dentro do loop de
 // renderização.
-float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
-float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 9.0f; // Distância da câmera para o ponto look-at
+float g_CameraTheta = -M_PI_2; // Ângulo no plano ZX em relação ao eixo Z
+float g_CameraPhi = M_PI_2/4;   // Ângulo em relação ao eixo Y
+float g_CameraDistance = 10.0f; // Distância da câmera para o ponto look-at
 
 // Variável que controla o tipo de projeção utilizada: perspectiva ou ortográfica.
 bool g_UsePerspectiveProjection = true;
@@ -255,13 +261,16 @@ float g_startFinalAnimation=-1; // contagem de tempo para final do jogo
 
 bool g_IsInMenuStart = true;
 
+int g_CurrentScore=0; // Score do jogador
+
 // Variável para dizer o tipo de camera sendo utilizada
 enum cameraType{
     freeCamera,
     freeLookAt,
     lockedLookAt,
     slidingLookAt,
-    finalCamera
+    finalCamera,
+    startCamera
 };
 
 enum cameraType g_CameraType = freeLookAt;
@@ -376,6 +385,7 @@ int main(int argc, char* argv[])
         LoadTextureImage("../../data/lamp_texture.jpg");  // TextureImage5
         LoadTextureImage("../../data/lamp_texture1.png");  // TextureImage6
         LoadTextureImage("../../data/finish_line.jpg");  // TextureImage7
+        LoadTextureImage("../../data/MonsterUltra_em.png");  // TextureImage8
         std::vector<std::string> faces
         {
             "../../data/skybox_px.png", 
@@ -401,7 +411,7 @@ int main(int argc, char* argv[])
         ComputeNormals(&lampModel);
         BuildTrianglesAndAddToVirtualScene(&lampModel);
 
-        ObjModel pointModel("../../data/monster_ultra_white.obj");
+        ObjModel pointModel("../../data/white_monster.obj");
         ComputeNormals(&pointModel);
         BuildTrianglesAndAddToVirtualScene(&pointModel);
 
@@ -463,7 +473,7 @@ int main(int argc, char* argv[])
         lamps.push_back(Lamp(glm::vec2(31.93f, 675.0f)));
         lamps.push_back(Lamp(glm::vec2(-7.93, 1199.58f)));
         
-        std::vector<Point> points;
+        std::vector<Point> points; //NÃO CONFUNDIR POINTS com pontos 3D, eles são pontos (para pontuação final) do jogo
         points.push_back(Point(glm::vec2(0.0f, 100.0f)));
 
        
@@ -490,7 +500,6 @@ int main(int argc, char* argv[])
     // Ficamos em um loop infinito, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
     {
-
         // Aqui executamos as operações de renderização
 
         // Definimos a cor do "fundo" do framebuffer como branco.  Tal cor é
@@ -533,6 +542,7 @@ int main(int argc, char* argv[])
                 else if(g_CarInfo.getIsSliding()) g_CameraType = slidingLookAt;
                 else g_CameraType = lockedLookAt;
             }
+            if(g_IsInMenuStart) g_CameraType = startCamera;
             if(g_GameFinished) g_CameraType = finalCamera;
             // Faz o calculo dos vetores da cãmera
             float r,x,y,z;
@@ -543,6 +553,7 @@ int main(int argc, char* argv[])
                     g_CameraPhi = g_CarInfo.getCameraPhi();
                     g_CameraTheta = g_CarInfo.getCameraTheta();
                 case freeLookAt:
+                case startCamera:
                     r = g_CameraDistance;
                     y = r*sin(g_CameraPhi);
                     z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
@@ -632,9 +643,9 @@ int main(int argc, char* argv[])
             glUniform1i(g_object_id_uniform, SKYBOX);
             DrawVirtualObject("the_sphere");
 
-            glActiveTexture(GL_TEXTURE8);
+            glActiveTexture(GL_TEXTURE9);
             glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 8);
+            glUniform1i(glGetUniformLocation(g_GpuProgramID, "SkyboxCube"), 9);
 
             // Não há scale pois o tamanho da curva e plano ja é previamente definido
             model = Matrix_Identity();
@@ -670,15 +681,19 @@ int main(int argc, char* argv[])
                 DrawVirtualObject("lamp");
             }
 
-            // Desenha os pontos
-            for (const auto& point : points)
-            {
-                model = Matrix_Translate(point.position.x, 0.0f, point.position.y)
-                *Matrix_Scale(3.06f, 3.06f, 3.06f);
-                glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-                glUniform1i(g_object_id_uniform, POINT);
-                DrawVirtualObject("monster");
+            // Desenha os pontos do jogo
+            for (int i=0; i<points.size(); i++)
+            {   
+                if(points[i].active){
+                    model = Matrix_Translate(points[i].position.x, points[i].height, points[i].position.z)
+                    *points[i].getMatrixRotate()
+                    *Matrix_Scale(0.9f, 0.9f, 0.9F);
+                    glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                    glUniform1i(g_object_id_uniform, POINT);
+                    DrawVirtualObject("monster");
+                }
             }
+            
 
             // Desenhamos as partes do carro
             PushMatrix(model);
@@ -726,6 +741,16 @@ int main(int argc, char* argv[])
                 finishGame();
             }
 
+            // Colisão com pontos
+            // Plano do carro com esfera
+            for (int i=0; i<points.size(); i++)
+            {   
+                if(g_CarInfo.checkColisionWithItem(points[i]) && points[i].active){
+                    points[i].active=false;
+                    g_CurrentScore++;
+                }
+            }
+
             // Colisão do carro com a pista
             // ponto-superficie de bezier
             // Se colisão não for detectada, significa que carro saiu da track
@@ -734,18 +759,22 @@ int main(int argc, char* argv[])
             }
 
         // ________________________<<______________________<<<<<<
+        // _______________________>>_____________________>>>>  Imprime textos na tela
         
-        
+            // Prints desativados em produção
+            // TextRendering_ShowVelocity(window, g_CarInfo.getVelocity(), g_CarInfo.getIsSliding());
+            // TextRendering_ShowRotation(window, g_CarInfo.getRotation());
 
-        TextRendering_ShowVelocity(window, g_CarInfo.getVelocity(), g_CarInfo.getIsSliding());
-        TextRendering_ShowRotation(window, g_CarInfo.getRotation());
+            if(g_IsInMenuStart) TextRendering_ShowStartScreen(window);
+            else if(g_GameFinished) TextRendering_ShowEndResult(window);
+            else TextRendering_ShowLifeAndPoints(window);
 
-        // Imprimimos na informação sobre a matriz de projeção sendo utilizada.
-        //TextRendering_ShowProjection(window);
 
-        // Imprimimos na tela informação sobre o número de quadros renderizados
-        // por segundo (frames per second).
-        TextRendering_ShowFramesPerSecond(window);
+            // Imprimimos na tela informação sobre o número de quadros renderizados
+            // por segundo (frames per second).
+            TextRendering_ShowFramesPerSecond(window);
+
+        // ________________________<<______________________<<<<<<
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -761,14 +790,25 @@ int main(int argc, char* argv[])
         // pela biblioteca GLFW.
         glfwPollEvents();
 
+        // _______________________>>_____________________>>>>  Check Colisões
         // Atualiza as variaveis de movimentaçao com base no teclado.
-        updateFromKeyboard();
+            updateFromKeyboard();
 
-        // Atuliza valores pro carro (para o tempo passado)
-        g_CarInfo.update(getTimeSinceLastFrame());
 
-        // Atualiza o tempo do ultimo frame
-        setEndFrameTime();
+            // Atuliza valores pro carro (para o tempo passado)
+            g_CarInfo.update(getTimeSinceLastFrame());
+
+            // Atualiza animação dos pontos
+            for (int i=0; i<points.size(); i++)
+            {
+                points[i].updateAnimation(getTimeSinceLastFrame());
+            }   
+            if(g_IsInMenuStart) g_CameraTheta+=getTimeSinceLastFrame()*START_CAMERA_SPEED;
+
+
+            // Atualiza o tempo do ultimo frame
+            setEndFrameTime();
+        // ________________________<<______________________<<<<<<
 
         // Quando o jogo finaliza e se passam 5s, fecha o jogo
         if(g_GameFinished && ((g_TimeOfLastFrame - g_startFinalAnimation) >5.0f)) glfwSetWindowShouldClose(window, GL_TRUE);
@@ -920,6 +960,7 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage5"), 5);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage6"), 6);
     glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage7"), 7);
+    glUniform1i(glGetUniformLocation(g_GpuProgramID, "TextureImage8"), 8);
     glUseProgram(0);
 }
 
@@ -1444,6 +1485,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     // Assim, temos que o usuário consegue controlar a câmera.
     if (g_LeftMouseButtonPressed)
     {
+        if(g_IsInMenuStart) return; //camera fixa no start, sem movimento de câmera
 
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
@@ -1507,6 +1549,8 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 // Função callback chamada sempre que o usuário movimenta a "rodinha" do mouse.
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
+    if(g_IsInMenuStart) return; //camera fixa no start, sem movimento de câmera
+
     // Atualizamos a distância da câmera para a origem utilizando a
     // movimentação da "rodinha", simulando um ZOOM.
     g_CameraDistance -= 0.1f*yoffset;
@@ -1611,7 +1655,8 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     // Se o usuário apertar a tecla H, fazemos um "toggle" do texto de debugging mostrado na tela.
     if (key == GLFW_KEY_H && action == GLFW_PRESS)
     {
-        g_ShowInfoText = !g_ShowInfoText;
+        // g_ShowInfoText = !g_ShowInfoText;
+        // Código comentado para produção
     }
 
     // Se o usuário apertar a tecla R, recarregamos os shaders dos arquivos "shader_fragment.glsl" e "shader_vertex.glsl".
@@ -1620,6 +1665,13 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         LoadShadersFromFiles();
         fprintf(stdout,"Shaders recarregados!\n");
         fflush(stdout);
+    }
+
+    if(key == GLFW_KEY_ENTER && action ==GLFW_PRESS){
+        keyInfo.start_held=true;
+    }
+    if(key == GLFW_KEY_ENTER && action ==GLFW_RELEASE){
+        keyInfo.start_held=false;
     }
 }
 
@@ -1953,6 +2005,11 @@ void PrintObjModelInfo(ObjModel* model)
 // vim: set spell spelllang=pt_br :
 void updateFromKeyboard(){
     if(g_GameFinished) return;
+    if(g_IsInMenuStart){
+        if(keyInfo.start_held){
+            startGame();
+        }else return;
+    }
     if(g_CameraType==freeCamera){
         // Controls camera if free camera
         float cameraVel=FREE_CAM_VEL;
@@ -2348,4 +2405,49 @@ void finishGame(){
     g_GameFinished = true;
     g_startFinalAnimation = g_TimeOfLastFrame;
     g_CarInfo.setAccelerate(0.0f);
+}
+void animateStartCamera(){
+    g_CameraTheta+=getTimeSinceLastFrame()*START_CAMERA_SPEED;
+    std:: cout<<g_CameraTheta << "\n";
+}
+
+// Menu inicial do jogo
+void TextRendering_ShowStartScreen(GLFWwindow* window)
+{
+    float pad = TextRendering_LineHeight(window);
+
+    TextRendering_PrintString(window, "HEAVEN'S RACE", -0.05, 1.0f-pad, 1.0f);
+    TextRendering_PrintString(window, "W - frente", -0.05f, 1.0f-2.0*pad, 1.0f);
+    TextRendering_PrintString(window, "A - esquerda", -0.05f, 1.0f-3.0*pad, 1.0f);
+    TextRendering_PrintString(window, "D - direita", -0.05f, 1.0f-4.0*pad, 1.0f);
+    TextRendering_PrintString(window, "SPACE - freio/ré", -0.05f, 1.0f-5.0*pad, 1.0f);
+    TextRendering_PrintString(window, "Chegue até a linha de chegada,", -0.3f, 1.0f-7.0*pad, 1.0f);
+    TextRendering_PrintString(window, "no menor tempo e coletando o máximo de pontos!", -0.4f, 1.0f-8.0*pad, 1.0f);
+    TextRendering_PrintString(window, "[pressione ENTER para começar]", -0.2f, 1.0f-9.0*pad, 1.0f);
+
+}
+
+// Pontuação final!
+void TextRendering_ShowEndResult(GLFWwindow* window)
+{
+    float pad = TextRendering_LineHeight(window);
+    char buffer[100];
+    TextRendering_PrintString(window, "PARABÉNS! Você chegou em HEAVEN!", -0.2, 1.0f-pad, 1.0f);
+
+    snprintf(buffer, 100, "Tempo final: %.2f s\n", g_startFinalAnimation);
+    TextRendering_PrintString(window, buffer, -0.05, 3.0f-pad, 1.0f);
+    snprintf(buffer, 100, "Pontos coletados: %d\n", g_CurrentScore);
+    TextRendering_PrintString(window, buffer, -0.05, 4.0f-pad, 1.0f);
+}
+
+void TextRendering_ShowLifeAndPoints(GLFWwindow* window)
+{
+
+    float pad = TextRendering_LineHeight(window);
+    char buffer[100];
+
+    snprintf(buffer, 100, "Tempo: %.2fs\n", g_TimeOfLastFrame);
+    TextRendering_PrintString(window, buffer, -0.05, 1.0f-1.0*pad, 1.0f);
+    snprintf(buffer, 100, "Pontos: %d\n", g_CurrentScore);
+    TextRendering_PrintString(window, buffer, -0.05, 1.0f-2.0f*pad, 1.0f);
 }

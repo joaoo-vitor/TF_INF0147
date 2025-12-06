@@ -55,6 +55,7 @@ uniform sampler2D TextureImage4;
 uniform sampler2D TextureImage5;
 uniform sampler2D TextureImage6;
 uniform sampler2D TextureImage7;
+uniform sampler2D TextureImage8;
 uniform samplerCube SkyboxCube;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
@@ -206,6 +207,12 @@ void main()
         vec3 p_linha = normalize(position_model.xyz - bbox_center);
 
         Kd = texture(SkyboxCube, p_linha).rgb;
+    }else if (object_id == POINT){
+        light_model = LIGHT_MODEL_BLINNPHONG;
+        Ka = vec3(0.4, 0.4, 0.4);
+        Kd = texture(TextureImage8, texcoords).rgb;
+        Ks = vec3(0.3, 0.3, 0.3);
+        q=50;
     }
     else // Objeto desconhecido = cor default, cinza escuro
     {
@@ -213,7 +220,7 @@ void main()
         Kd = vec3(0.05,0.05,0.05);
     }
 
-    
+
     if(isGouradInterpolation){
         color.rgb = color_v;
     }else{

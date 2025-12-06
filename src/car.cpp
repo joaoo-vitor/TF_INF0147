@@ -8,6 +8,8 @@
 #include <iostream>
 #include <limits>
 #include "lamp.cpp"
+#include "point.cpp"
+
 
 const float BB_MIN_X = -1.52f;
 const float BB_MAX_X = 1.52f;
@@ -234,9 +236,6 @@ public:
         float centerX = position.x;
         float centerY = position.y; // Assuming p_car.y is the center height of the car's BB
         float centerZ = position.z;
-
-        // Assuming the bounding box coordinates are relative to the car's anchor point (p_car),
-        // we use the min/max values directly as offsets from the center/anchor.
         
         // Vertices de baixo do paralelogramo
         car_vertices[0] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MIN_Y, position.z + BB_MIN_Z, 1.0f);
@@ -251,6 +250,22 @@ public:
         car_vertices[7] = glm::vec4(position.x + BB_MIN_X, position.y + BB_MAX_Y, position.z + BB_MAX_Z, 1.0f);
 
         return lamp.checkColisionWithPlane(car_vertices);
+    }
+
+    // Checa colisão com pontuação do jogo
+    bool checkColisionWithItem(Point item){
+        glm::vec3 p_closest; // Ponto mais perto do AABB até a esfera
+        
+        p_closest.x = std::max(position.x+BB_MIN_X, std::min(item.position.x, position.x+BB_MAX_X));
+        p_closest.y = std::max(position.y+BB_MIN_Y, std::min(item.position.y, position.y+BB_MAX_Y));
+        p_closest.z = std::max(position.z+BB_MIN_Z, std::min(item.position.z, position.z+BB_MAX_Z));
+
+        
+        // Distância do centro da esfera até o ponto mais próximo
+        glm::vec3 diff = glm::vec3(item.position) - p_closest;
+        float distSqr = glm::dot(diff, diff);
+
+        return distSqr<= item.radius*item.radius;
     }
 
     void setPosition(glm::vec4 newPosition){
