@@ -53,12 +53,12 @@
 #include "lamp.cpp"
 #include "point.cpp"
 #include "keyboard.cpp"
+#include "collisions.cpp"
 
 // Defines
 #define FREE_CAM_VEL 100.0f
 #define CAM_TURN_VEL M_PI_2
 #define START_CAMERA_SPEED 2.0f*M_PI/40.0f; // 40 segundos para fazer a volta no carro na câmera inicial 
-const glm::vec3 FINISH_LINE_CENTER(0.0f, 1.5f, 1280.0f); // Ponto central da linha de chegada
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -474,7 +474,19 @@ int main(int argc, char* argv[])
         lamps.push_back(Lamp(glm::vec2(-7.93, 1199.58f)));
         
         std::vector<Point> points; //NÃO CONFUNDIR POINTS com pontos 3D, eles são pontos (para pontuação final) do jogo
+        // Pontos foram definidos arbitrariamente (andando com o carro e testando)
         points.push_back(Point(glm::vec2(0.0f, 100.0f)));
+        points.push_back(Point(glm::vec2(-8.81f, 164.39f)));
+        points.push_back(Point(glm::vec2(-43.30f, 316.79f)));
+        points.push_back(Point(glm::vec2(-11.0f,  397.58f)));
+        points.push_back(Point(glm::vec2(56.67f, 444.0f)));
+        points.push_back(Point(glm::vec2(53.94f, 678.15f)));
+        points.push_back(Point(glm::vec2(5.11f , 701.386f)));
+        points.push_back(Point(glm::vec2(-49.78f , 761.22f)));
+        points.push_back(Point(glm::vec2(-26.26f, 879.715f)));
+        points.push_back(Point(glm::vec2(-2.02f, 1011.0f)));
+        points.push_back(Point(glm::vec2(0.19f , 1166.75f)));
+        points.push_back(Point(glm::vec2(0.0f, 1275.0f)));
 
        
 
@@ -754,7 +766,7 @@ int main(int argc, char* argv[])
             // Colisão do carro com a pista
             // ponto-superficie de bezier
             // Se colisão não for detectada, significa que carro saiu da track
-            if(!checkCarFollowsTrack(g_CarInfo.getPosition(), P_bezier, T_bezier, 43.0f)){
+            if(!checkCarFollowsTrack(g_CarInfo.getPosition(), P_bezier, T_bezier, 43.0f) && !g_GameFinished){
                 restartGame(true);
             }
 
@@ -2300,23 +2312,7 @@ SimpleModel GenerateCurvedTrackSimpleModel(float width, const std::vector<glm::v
 }
 
 bool checkCarCrossFinishLine(const glm::vec4& carPosition, const glm::vec4& carForwardVector){
-    // reta que passa pelo carro             v--- plano de chegada
-    //  ______                             |
-    // ( ---> )                            |
-    //  o    o                             |
-    glm::vec3 a = glm::vec3(carPosition)- 1.5f * glm::vec3(carForwardVector);
-    glm::vec3 b = glm::vec3(carPosition)+ 1.5f * glm::vec3(carForwardVector);
-
-    glm::vec3 n = glm::vec3(0.0f, 0.0f, -1.0f);// normal do plano de chegada
-    glm::vec3 c = FINISH_LINE_CENTER;
-
-    // caso for paralelo
-    if(!dot((b-a), n)) return 0;
-    // se nao for, ve qual o valor de t
-    // substituição da equação da reta na eq do plano
-    float t = dot((c-a), n)/dot((b-a), n);
-    if(t>=0.0 && t<=1.0) return true;
-    else return false;
+    return checkPlaneLineCollision(carPosition, carForwardVector);
 }
 
 // Função retorna sim sse o carro estiver colidindo com a pista (está dentro)
@@ -2324,7 +2320,7 @@ bool checkCarFollowsTrack(const glm::vec4 carPosition, const std::vector<glm::ve
     // Verifica em qual bezier cubica estamos dentro
     glm::vec2 p1,p2;
     glm::vec2 tg1, tg2;
-    for(int i=0; i< P_bezier.size()-2; i++){
+    for(int i=0; i< P_bezier.size()-1; i++){
         if(carPosition.z>=P_bezier[i][1]){
             if(carPosition.z<P_bezier[i+1][1]){
                 p1 = P_bezier[i];
@@ -2384,7 +2380,6 @@ bool checkCarFollowsTrack(const glm::vec4 carPosition, const std::vector<glm::ve
     glm::vec2 delta = glm::vec2(carPosition.x, carPosition.z) - center;
     float dist = glm::dot(delta, normal); //Projetamos o vetor delta no vetor normal
 
-    // std::cout << "t: " << t << ", (p1.y, p2.y): (" << p1.y << ", " << p2.y << ") fabs(dist):" << fabs(dist) << "\n";
     return std::fabs(dist) <= halfW;
 }
 
@@ -2408,7 +2403,6 @@ void finishGame(){
 }
 void animateStartCamera(){
     g_CameraTheta+=getTimeSinceLastFrame()*START_CAMERA_SPEED;
-    std:: cout<<g_CameraTheta << "\n";
 }
 
 // Menu inicial do jogo
@@ -2420,9 +2414,9 @@ void TextRendering_ShowStartScreen(GLFWwindow* window)
     TextRendering_PrintString(window, "W - frente", -0.05f, 1.0f-2.0*pad, 1.0f);
     TextRendering_PrintString(window, "A - esquerda", -0.05f, 1.0f-3.0*pad, 1.0f);
     TextRendering_PrintString(window, "D - direita", -0.05f, 1.0f-4.0*pad, 1.0f);
-    TextRendering_PrintString(window, "SPACE - freio/ré", -0.05f, 1.0f-5.0*pad, 1.0f);
-    TextRendering_PrintString(window, "Chegue até a linha de chegada,", -0.3f, 1.0f-7.0*pad, 1.0f);
-    TextRendering_PrintString(window, "no menor tempo e coletando o máximo de pontos!", -0.4f, 1.0f-8.0*pad, 1.0f);
+    TextRendering_PrintString(window, "SPACE - freio/re", -0.05f, 1.0f-5.0*pad, 1.0f);
+    TextRendering_PrintString(window, "Chegue ate a linha de chegada,", -0.3f, 1.0f-7.0*pad, 1.0f);
+    TextRendering_PrintString(window, "no menor tempo e coletando o maximo de pontos!", -0.4f, 1.0f-8.0*pad, 1.0f);
     TextRendering_PrintString(window, "[pressione ENTER para começar]", -0.2f, 1.0f-9.0*pad, 1.0f);
 
 }
@@ -2432,7 +2426,7 @@ void TextRendering_ShowEndResult(GLFWwindow* window)
 {
     float pad = TextRendering_LineHeight(window);
     char buffer[100];
-    TextRendering_PrintString(window, "PARABÉNS! Você chegou em HEAVEN!", -0.2, 1.0f-pad, 1.0f);
+    TextRendering_PrintString(window, "PARABÉNS! Voces chegou em HEAVEN!", -0.2, 1.0f-pad, 1.0f);
 
     snprintf(buffer, 100, "Tempo final: %.2f s\n", g_startFinalAnimation);
     TextRendering_PrintString(window, buffer, -0.05, 3.0f-pad, 1.0f);

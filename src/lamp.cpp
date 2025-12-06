@@ -1,11 +1,14 @@
+#ifndef LAMP_H
+#define LAMP_H
+
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <iostream>
 #include <cmath>
-#ifndef LAMP_H
-#define LAMP_H
+#include "collisions.cpp"
+
 class Lamp {
 public:
     // Posição do poste no plano XZ
@@ -17,17 +20,7 @@ public:
 
     // Função que verifica colisão entre o poste (cilindro) e um plano
     bool checkColisionWithPlane(const std::vector<glm::vec4>& plane){
-        const float radius = 1.0f;
-
-        for (const glm::vec4& v : plane)
-        {
-            // Projetamos o ponto no XZ
-            glm::vec2 pontoXZ = glm::vec2(v.x, v.z);
-
-            float dist = glm::distance(pontoXZ, positionXZ);
-            if (dist <= radius)return true;
-        }
-        return false;
+        return checkPlaneCilinderCollision(plane, positionXZ);
     }
 };
 

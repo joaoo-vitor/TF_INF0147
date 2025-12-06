@@ -254,18 +254,8 @@ public:
 
     // Checa colisão com pontuação do jogo
     bool checkColisionWithItem(Point item){
-        glm::vec3 p_closest; // Ponto mais perto do AABB até a esfera
-        
-        p_closest.x = std::max(position.x+BB_MIN_X, std::min(item.position.x, position.x+BB_MAX_X));
-        p_closest.y = std::max(position.y+BB_MIN_Y, std::min(item.position.y, position.y+BB_MAX_Y));
-        p_closest.z = std::max(position.z+BB_MIN_Z, std::min(item.position.z, position.z+BB_MAX_Z));
-
-        
-        // Distância do centro da esfera até o ponto mais próximo
-        glm::vec3 diff = glm::vec3(item.position) - p_closest;
-        float distSqr = glm::dot(diff, diff);
-
-        return distSqr<= item.radius*item.radius;
+        return checkAABBSphereCollision(position, BB_MIN_X, BB_MIN_Y, BB_MIN_Z, BB_MAX_X, BB_MAX_Y, BB_MAX_Z,
+        item.position, item.radius);
     }
 
     void setPosition(glm::vec4 newPosition){
